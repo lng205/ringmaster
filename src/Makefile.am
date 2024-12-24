@@ -1,1 +1,0 @@
-SUBDIRS = util video app
