@@ -17,7 +17,7 @@ video call. For any questions, please contact the owner [Francis Yan](https://fr
 - Required environment: Ubuntu >=18.04
 - Install required packages
    ```
-   sudo apt install libvpx-dev libsdl2-dev
+   sudo apt install libvpx-dev libsdl2-dev libjerasure-dev
    ```
 
 ## Building
