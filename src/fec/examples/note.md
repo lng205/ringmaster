@@ -40,3 +40,16 @@ We can convert a GF(2^w) element multiplication to a GF(2) matrix multiplication
 Schedule speeds up the multiplication of a fix matrix with different data chunks. For a sparse encoding matrix, the multiplication is equivalent to XORing certain bits of the data chunks.
 
 ![alt text](f6.png)
+
+## Using the library
+
+- Install the lib with dependencies via apt: `sudo apt-get install libjerasure-dev`
+    - This will install libjersaure2, libjerasure-dev and libgf-complete-dev.
+
+- The lib cannot be found by cmake find_package or pkg-config. So, we have to manually add the include and lib paths to the compiler.
+    - Include header files: `-I/usr/include/jerasure/`
+    - Link the lib: `-lJerasure -lgf_complete`
+
+- The source repo provides examples for encoding and decoding.
+    - [jerasure_07](https://github.com/tsuraan/Jerasure/blob/master/Examples/jerasure_07.c) provides a complete example using cauchy matrix and schedule.
+    - Other examples demonstrate the details of reed-solomon, cauchy matrix and some RAID-6 codes.
