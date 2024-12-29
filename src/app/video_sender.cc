@@ -5,6 +5,7 @@
 #include <stdexcept>
 #include <utility>
 #include <chrono>
+#include <fstream>
 
 #include "conversion.hh"
 #include "timerfd.hh"
@@ -165,6 +166,15 @@ int main(int argc, char * argv[])
     }
   );
 
+  // log packet info to a csv file
+  std::string output_file_path = "data/output_" + std::to_string(config_msg.target_bitrate) + ".csv";
+  std::ofstream output_file(output_file_path);
+  if (!output_file.is_open()) {
+    throw runtime_error("Failed to open output file");
+  }
+  cout << "Opened output file" << endl;
+  output_file << "frame_id,frame_size,frag_id,frag_cnt\n";
+
   // when UDP socket is writable
   poller.register_event(udp_sock, Poller::Out,
     [&]()
@@ -173,6 +183,13 @@ int main(int argc, char * argv[])
 
       while (not send_buf.empty()) {
         auto & datagram = send_buf.front();
+
+        std::string row = 
+        std::to_string(datagram.frame_id) + ", " + 
+        std::to_string(datagram.payload.size()) + ", " + 
+        std::to_string(datagram.frag_id) + ", " + 
+        std::to_string(datagram.frag_cnt) + "\n";
+        output_file << row;
 
         // timestamp the sending time before sending
         datagram.send_ts = timestamp_us();
