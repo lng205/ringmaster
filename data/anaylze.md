@@ -106,4 +106,43 @@ frame_id,frame_size,frag_id,frag_cnt
 
 [TODO] 除了填充，还有什么处理不等长包的方法？
 
-[TODO] Tambur是如何处理此问题的？
+### Tambur是如何处理此问题的？
+
+先观察Tambur如何将FEC嵌入到Ringmaster的发送过程中：
+Tambur在Encoder::packetize_encoded_frame()中，将vpx编码得到的数据传入FECSender::next_frame()。
+next_frame()调用FrameGenerator::generate_frame_packets()来生成数据包和校验包。
+
+`tambur/src/fec/frame_generator.cc`的这段代码负责将数据包压入队列：
+
+```cpp
+for (uint8_t index = 0; index < frame_pkts_info.size(); index++) {
+  if (frame_pkts_info.at(index).second) {
+    continue;
+  }
+  if ((index < (num_data_pkts - 1)) or (0 == (size %
+      datagram_size))) {
+    const FECDatagram pkt {sqn_++, false, frame_num_,
+        headerCode_->encode_sizes_of_frames(frame_sizes_.back(), index),
+        index, stripe_pos, set_frame?
+        frame_str.substr(index * datagram_size, datagram_size) :
+            random_str(datagram_size)};
+    data_pkts.push_back(pkt);
+  }
+  else {
+    uint16_t pkt_size = size % datagram_size;
+    uint16_t padding_size = datagram_size - pkt_size;
+    vector<char> padding(padding_size, char(0));
+    string pad;
+    pad.reserve(padding.size());
+    for (auto p : padding) { pad.push_back(p); }
+    const FECDatagram pkt {sqn_++, false, frame_num_,
+        headerCode_->encode_sizes_of_frames(frame_sizes_.back(), index),
+        index, stripe_pos, (set_frame?  frame_str.substr(index * datagram_size,
+            pkt_size) : random_str(pkt_size) ).append(pad)};
+    data_pkts.push_back(pkt);
+  }
+  stripe_pos += data_pkts.back().payload.size() / stripe_size;
+}
+```
+
+可以看出Tambur会对最后一个数据包填充0（else分支），使其达到datagram_size的大小。
