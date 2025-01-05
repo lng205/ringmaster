@@ -106,3 +106,10 @@ A collection of all the notes taken during the development of the project.
 - Use `extern "C" {}` to include C code in C++.
     - C++ code include extra information in the function name for overloading, which is not present in C.
     - The compiler will automatically add this to standard C libraries.
+
+### Tambur Notes
+
+#### Calling Chain
+
+- Encoder -> fec_sender -> frame_generator -> StreamCode -> BlockCode -> jerasure_matrix_encode
+- BlockCode -> BlockCodeFactory -> set_cauchy_matrix -> cauchy_original_coding_matrix
