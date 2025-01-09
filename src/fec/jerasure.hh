@@ -9,12 +9,20 @@ extern "C" {
 
 using namespace std;
 
+struct CodingInfo {
+    int k, m, w;
+    size_t size;
+};
+
 class Jerasure {
 public:
-    Jerasure(int k, int m, int size);
+    Jerasure(CodingInfo info);
+    ~Jerasure() {free(matrix);}
     void encode(char** data, char** coding);
     void decode(char** data, char** coding, int* erasures);
+    CodingInfo get_info() {return {k, m, w, size};}
 private:
-    int k, m, w, size;
+    int k, m, w;
+    size_t size;
     int* matrix = NULL;
 };

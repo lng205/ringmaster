@@ -31,7 +31,7 @@ A collection of all the notes taken during the development of the project.
 - The compiler flag -D_REENTRANT is used to enable reentrant version of implementations.
 
 
-### CMake Notes
+### CMake
 
 - find_package() is used to find and load a package and it has to work with existing CMake modules.
     - e.g. `find_package(OpenCV REQUIRED)`
@@ -46,7 +46,9 @@ A collection of all the notes taken during the development of the project.
     - `target_include_directories(target PUBLIC include)` will not search subdirectories.
     - The `PUBLIC` keyword is used to propagate the include path to the target's dependents.
 
-### Tambur Deployment Notes
+### Tambur
+
+#### Deployment
 
 1. Run the install commands per `tambur_install.sh`
     - `mahimahi` ppa doesn't support Ubuntu 24.04 LTS, so it needs to be compiled from source.
@@ -82,7 +84,12 @@ A collection of all the notes taken during the development of the project.
     - (Optional) May need to install the font 'Times New Roman' for the plot.
         - Use `python3 -c "import matplotlib as mpl; print(mpl.matplotlib_fname())"` to find the matplotlibrc cache and clear it.
 
-### Mahimahi Notes
+#### Calling Chain
+
+- Encoder -> fec_sender -> frame_generator -> StreamCode -> BlockCode -> jerasure_matrix_encode
+- BlockCode -> BlockCodeFactory -> set_cauchy_matrix -> cauchy_original_coding_matrix
+
+### Mahimahi
 
 - Mahimahi will create a shell environment for each command.
 - Basic commands: `mm-delay` `mm-loss`.
@@ -101,8 +108,16 @@ A collection of all the notes taken during the development of the project.
     ```
     - The address pointing to the host outside all containers can be accessed by the env var `MAHIMAHI_BASE` in the shell.
 
-### C++ Notes
+### C++
 
 - Use `extern "C" {}` to include C code in C++.
     - C++ code include extra information in the function name for overloading, which is not present in C.
     - The compiler will automatically add this to standard C libraries.
+
+### Ringmaster
+
+#### Encoder
+
+- The encoder uses a string_view to visit the buffer returned by the libvpx encoder.
+    - The lifetime of the buffer is managed by the libvpx encoder.
+    - The buffer is only valid before another call to `vpx_codec_*` functions. (According to `vpx_codec_get_cx_data`)

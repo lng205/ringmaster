@@ -1,6 +1,6 @@
 #include "jerasure.hh"
 
-Jerasure::Jerasure(int k, int m, int size) : k(k), m(m), w(8), size(size) {
+Jerasure::Jerasure(CodingInfo info) : k(info.k), m(info.m), w(info.w), size(info.size) {
     matrix = cauchy_original_coding_matrix(k, m, w);
 }
 

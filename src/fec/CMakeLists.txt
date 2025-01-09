@@ -1,5 +1,6 @@
 add_library(fec
     jerasure.cc
+    intra_frame.cc
 )
 
 # Hard-coded path to Jerasure library
