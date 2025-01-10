@@ -21,14 +21,18 @@ struct Datagram
            const FrameType _frame_type,
            const uint16_t _frag_id,
            const uint16_t _frag_cnt,
+           const uint16_t _repair_id,
+           const uint16_t _repair_cnt,
            const std::string_view _payload);
 
   uint32_t frame_id {};    // frame ID (1)
   FrameType frame_type {}; // frame type (2)
   uint16_t frag_id {};     // fragment ID in this frame (3)
   uint16_t frag_cnt {};    // total fragments in this frame (4)
-  uint64_t send_ts {};     // timestamp (us) when the datagram is sent (5)
-  std::string payload {};  // payload (6)
+  uint16_t repair_id {};   // repair ID in this frame (5)
+  uint16_t repair_cnt {};  // total repairs in this frame (6)
+  uint64_t send_ts {};     // timestamp (us) when the datagram is sent (7)
+  std::string payload {};  // payload (8)
 
   // retransmission-related
   unsigned int num_rtx {0};
@@ -36,7 +40,7 @@ struct Datagram
 
   // header size after serialization
   static constexpr size_t HEADER_SIZE = sizeof(uint32_t) +
-      sizeof(FrameType) + 2 * sizeof(uint16_t) + sizeof(uint64_t);
+      sizeof(FrameType) + 4 * sizeof(uint16_t) + sizeof(uint64_t);
 
   // maximum size for 'payload' (initialized in .cc and modified by set_mtu())
   static size_t max_payload;
