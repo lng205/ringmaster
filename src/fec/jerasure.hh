@@ -10,7 +10,7 @@ extern "C" {
 using namespace std;
 
 struct CodingInfo {
-    int k, m, w;
+    uint16_t k, m, w;
     size_t size;
 };
 
@@ -22,7 +22,7 @@ public:
     void decode(char** data, char** coding, int* erasures);
     CodingInfo get_info() {return {k, m, w, size};}
 private:
-    int k, m, w;
+    uint16_t k, m, w;
     size_t size;
     int* matrix = NULL;
 };

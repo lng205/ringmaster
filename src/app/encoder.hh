@@ -15,6 +15,7 @@ extern "C" {
 #include "image.hh"
 #include "protocol.hh"
 #include "file_descriptor.hh"
+#include "intra_frame.hh"
 
 class Encoder
 {
@@ -111,6 +112,9 @@ private:
     check_call(vpx_codec_control_(std::forward<Args>(args)...),
                VPX_CODEC_OK, "vpx_codec_control_");
   }
+
+  // FEC
+  IntraFrameFEC fec_;
 };
 
 #endif /* ENCODER_HH */

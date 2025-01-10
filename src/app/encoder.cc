@@ -19,7 +19,7 @@ Encoder::Encoder(const uint16_t display_width,
                  const uint16_t frame_rate,
                  const string & output_path)
   : display_width_(display_width), display_height_(display_height),
-    frame_rate_(frame_rate), output_fd_()
+    frame_rate_(frame_rate), output_fd_(), fec_()
 {
   // open the output file
   if (not output_path.empty()) {
@@ -205,25 +205,34 @@ size_t Encoder::packetize_encoded_frame()
         }
       }
 
-      // total fragments to divide this frame into
-      const uint16_t frag_cnt = narrow_cast<uint16_t>(
-          frame_size / (Datagram::max_payload + 1) + 1);
-
-      // next address to copy compressed frame data from
+      // FEC
       uint8_t * buf_ptr = static_cast<uint8_t *>(encoder_pkt->data.frame.buf);
-      const uint8_t * const buf_end = buf_ptr + frame_size;
+      vector<FECDatagram> fec_datagrams = fec_.encode(frame_id_, buf_ptr, frame_size, Datagram::max_payload);
 
-      for (uint16_t frag_id = 0; frag_id < frag_cnt; frag_id++) {
-        // calculate payload size and construct the payload
-        const size_t payload_size = (frag_id < frag_cnt - 1) ?
-            Datagram::max_payload : buf_end - buf_ptr;
-
-        // enqueue a datagram
-        send_buf_.emplace_back(frame_id_, frame_type, frag_id, frag_cnt,
-          string_view {reinterpret_cast<const char *>(buf_ptr), payload_size});
-
-        buf_ptr += payload_size;
+      for (FECDatagram & datagram : fec_datagrams) {
+        send_buf_.emplace_back(frame_id_, frame_type, datagram.frag_id, datagram.frag_cnt,
+          datagram.repair_id, datagram.repair_cnt, datagram.payload);
       }
+
+      // // total fragments to divide this frame into
+      // const uint16_t frag_cnt = narrow_cast<uint16_t>(
+      //     frame_size / (Datagram::max_payload + 1) + 1);
+
+      // // next address to copy compressed frame data from
+      // uint8_t * buf_ptr = static_cast<uint8_t *>(encoder_pkt->data.frame.buf);
+      // const uint8_t * const buf_end = buf_ptr + frame_size;
+
+      // for (uint16_t frag_id = 0; frag_id < frag_cnt; frag_id++) {
+      //   // calculate payload size and construct the payload
+      //   const size_t payload_size = (frag_id < frag_cnt - 1) ?
+      //       Datagram::max_payload : buf_end - buf_ptr;
+
+      //   // enqueue a datagram
+      //   send_buf_.emplace_back(frame_id_, frame_type, frag_id, frag_cnt,
+      //     string_view {reinterpret_cast<const char *>(buf_ptr), payload_size});
+
+      //   buf_ptr += payload_size;
+      // }
     }
   }
 

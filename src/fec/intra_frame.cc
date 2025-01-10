@@ -9,8 +9,6 @@ T int_div_ceil(T a, T b) {
     return (a + b - 1) / b;
 }
 
-IntraFrameFEC::IntraFrameFEC(int max_payload) : _max_payload(max_payload) {}
-
 IntraFrameFEC::~IntraFrameFEC() {
     if (_data_buf) {
         for (int i = 0; i < _data_buf_k; i++) {
@@ -26,8 +24,8 @@ IntraFrameFEC::~IntraFrameFEC() {
     }
 }
 
-void IntraFrameFEC::encode(uint8_t* data, size_t size) {
-    Jerasure jerasure = _calc_fec_params(size);
+vector<FECDatagram> IntraFrameFEC::encode(uint32_t frame_id, uint8_t* data, size_t size, int max_payload) {
+    Jerasure jerasure = _calc_fec_params(size, max_payload);
     info = jerasure.get_info();
 
     _check_buf(_data_buf, _data_buf_k, _data_buf_size, info.k, info.size);
@@ -41,6 +39,15 @@ void IntraFrameFEC::encode(uint8_t* data, size_t size) {
     memset(_data_buf[info.k - 1] + padding, 0, info.size - padding);
 
     jerasure.encode(_data_buf, _coding_buf);
+
+    vector<FECDatagram> datagrams;
+    for (int i = 0; i < info.k; i++) {
+        datagrams.emplace_back(frame_id, i, info.k, -1, info.m, string_view(_data_buf[i], info.size));
+    }
+    for (int j = 0; j < info.m; j++) {
+        datagrams.emplace_back(frame_id, -1, info.k, j, info.m, string_view(_coding_buf[j], info.size));
+    }
+    return datagrams;
 }
 
 void IntraFrameFEC::_check_buf(char** buf, size_t& buf_k, size_t& buf_size, size_t k, size_t size) {
@@ -62,13 +69,13 @@ void IntraFrameFEC::_check_buf(char** buf, size_t& buf_k, size_t& buf_size, size
     }
 }
 
-Jerasure IntraFrameFEC::_calc_fec_params(size_t size) {
-    int k = static_cast<int>(int_div_ceil<size_t>(size, _max_payload));
+Jerasure IntraFrameFEC::_calc_fec_params(size_t size, int max_payload) {
+    uint8_t k = static_cast<int>(int_div_ceil<size_t>(size, max_payload));
     size_t packet_raw_size = int_div_ceil<size_t>(size, k);
     size_t packet_size = int_div_ceil<size_t>(packet_raw_size, SIZE_ALIGN) * SIZE_ALIGN;
 
     // 50% redundancy
-    int m = k;
+    uint8_t m = k;
 
     return Jerasure({k, m, 8, packet_size});
 };
