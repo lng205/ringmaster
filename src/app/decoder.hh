@@ -78,7 +78,6 @@ public:
           const std::string & output_path = "");
 
   // add a received datagram
-  void add_datagram(const Datagram & datagram);
   void add_datagram(Datagram && datagram);
 
   // is next frame complete; might skip to a complete key frame ahead
@@ -86,9 +85,6 @@ public:
 
   // depending on the lazy level, might decode and display the next frame
   void consume_next_frame();
-
-  // output stats every second and reset
-  void output_periodic_stats();
 
   // accessors
   uint32_t next_frame() const { return next_frame_; }

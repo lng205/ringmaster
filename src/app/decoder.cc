@@ -131,24 +131,16 @@ bool Decoder::add_datagram_common(const Datagram & datagram)
   return true;
 }
 
-void Decoder::add_datagram(const Datagram & datagram)
-{
-  if (not add_datagram_common(datagram)) {
-    return;
-  }
-
-  // copy the fragment into the frame
-  frame_buf_.at(datagram.frame_id).insert_frag(datagram);
-}
-
 void Decoder::add_datagram(Datagram && datagram)
 {
   if (not add_datagram_common(datagram)) {
     return;
   }
 
-  // move the fragment into the frame
-  frame_buf_.at(datagram.frame_id).insert_frag(move(datagram));
+  if (datagram.fec_type == FECType::DATA) {
+    // move the fragment into the frame
+    frame_buf_.at(datagram.frame_id).insert_frag(move(datagram));
+  }
 }
 
 bool Decoder::next_frame_complete()

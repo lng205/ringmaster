@@ -121,3 +121,9 @@ A collection of all the notes taken during the development of the project.
 - The encoder uses a string_view to visit the buffer returned by the libvpx encoder.
     - The lifetime of the buffer is managed by the libvpx encoder.
     - The buffer is only valid before another call to `vpx_codec_*` functions. (According to `vpx_codec_get_cx_data`).
+
+
+### Padding
+
+- Padding is used to ensure that the data is aligned for fec encoding.
+- The padding on data can be removed after encoding, and added back before decoding.

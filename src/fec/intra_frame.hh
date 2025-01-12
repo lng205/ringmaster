@@ -1,11 +1,17 @@
 #include "jerasure.hh"
 
+enum class FECType : uint8_t {
+  DATA = 0,
+  REPAIR = 1
+};
+
+std::ostream& operator<<(std::ostream& os, FECType& fec_type);
+
 struct FECDatagram {
     uint32_t frame_id;
+    FECType fec_type;
     uint16_t frag_id;
     uint16_t frag_cnt;
-    uint16_t repair_id;
-    uint16_t repair_cnt;
     string_view payload;
 };
 
@@ -17,7 +23,12 @@ public:
     CodingInfo info;
 private:
     Jerasure _calc_fec_params(size_t size, int max_payload);
-    void _check_buf(char** buf, size_t& buf_k, size_t& buf_size, size_t k, size_t size);
-    size_t _data_buf_k {}, _data_buf_size {}, _coding_buf_k {}, _coding_buf_size {};
-    char** _data_buf = nullptr, **_coding_buf = nullptr;
+    void _check_buf(char**& buf, size_t& buf_k, size_t& buf_size, size_t k, size_t size);
+    size_t _data_buf_k {};
+    size_t _data_buf_size {};
+    size_t _coding_buf_k {};
+    size_t _coding_buf_size {};
+    size_t _padding {};
+    char** _data_buf = nullptr;
+    char** _coding_buf = nullptr;
 };

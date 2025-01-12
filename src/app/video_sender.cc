@@ -180,6 +180,7 @@ int main(int argc, char * argv[])
         if (udp_sock.send(datagram.serialize_to_string())) {
           if (verbose) {
             cerr << "Sent datagram: frame_id=" << datagram.frame_id
+                 << " fec_type=" << datagram.fec_type
                  << " frag_id=" << datagram.frag_id
                  << " frag_cnt=" << datagram.frag_cnt
                  << " rtx=" << datagram.num_rtx << endl;

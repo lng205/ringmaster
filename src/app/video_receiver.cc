@@ -111,12 +111,14 @@ int main(int argc, char * argv[])
     }
 
     // send an ACK back to sender
-    AckMsg ack(datagram);
-    udp_sock.send(ack.serialize_to_string());
+    if (datagram.fec_type == FECType::DATA) {
+      AckMsg ack(datagram);
+      udp_sock.send(ack.serialize_to_string());
 
-    if (verbose) {
-      cerr << "Acked datagram: frame_id=" << datagram.frame_id
-           << " frag_id=" << datagram.frag_id << endl;
+      if (verbose) {
+        cerr << "Acked datagram: frame_id=" << datagram.frame_id
+            << " frag_id=" << datagram.frag_id << endl;
+      }
     }
 
     // process the received datagram in the decoder

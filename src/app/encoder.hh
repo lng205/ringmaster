@@ -15,7 +15,6 @@ extern "C" {
 #include "image.hh"
 #include "protocol.hh"
 #include "file_descriptor.hh"
-#include "intra_frame.hh"
 
 class Encoder
 {
