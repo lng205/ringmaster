@@ -212,7 +212,7 @@ size_t Encoder::packetize_encoded_frame()
 
       for (FECDatagram & datagram : fec_datagrams) {
         send_buf_.emplace_back(frame_id_, frame_type, datagram.fec_type,
-          datagram.frag_id, datagram.frag_cnt, datagram.payload);
+          datagram.frag_id, datagram.frag_cnt, datagram.padding, datagram.payload);
       }
     }
   }

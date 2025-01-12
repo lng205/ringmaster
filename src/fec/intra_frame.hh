@@ -12,6 +12,7 @@ struct FECDatagram {
     FECType fec_type;
     uint16_t frag_id;
     uint16_t frag_cnt;
+    uint16_t padding;
     string_view payload;
 };
 
@@ -28,7 +29,6 @@ private:
     size_t _data_buf_size {};
     size_t _coding_buf_k {};
     size_t _coding_buf_size {};
-    size_t _padding {};
     char** _data_buf = nullptr;
     char** _coding_buf = nullptr;
 };

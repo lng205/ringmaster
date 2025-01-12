@@ -9,9 +9,10 @@ Datagram::Datagram(const uint32_t _frame_id,
                    const FECType _fec_type,
                    const uint16_t _frag_id,
                    const uint16_t _frag_cnt,
+                   const uint16_t _padding,
                    const string_view _payload)
   : frame_id(_frame_id), frame_type(_frame_type), fec_type(_fec_type),
-    frag_id(_frag_id), frag_cnt(_frag_cnt), payload(_payload)
+    frag_id(_frag_id), frag_cnt(_frag_cnt), padding(_padding), payload(_payload)
 {}
 
 size_t Datagram::max_payload = 1500 - 28 - Datagram::HEADER_SIZE;
@@ -38,6 +39,7 @@ bool Datagram::parse_from_string(const string & binary)
   fec_type = static_cast<FECType>(parser.read_uint8());
   frag_id = parser.read_uint16();
   frag_cnt = parser.read_uint16();
+  padding = parser.read_uint16();
   send_ts = parser.read_uint64();
   payload = parser.read_string();
 
@@ -54,6 +56,7 @@ string Datagram::serialize_to_string() const
   binary += put_number(static_cast<uint8_t>(fec_type));
   binary += put_number(frag_id);
   binary += put_number(frag_cnt);
+  binary += put_number(padding);
   binary += put_number(send_ts);
   binary += payload;
 

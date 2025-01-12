@@ -50,22 +50,22 @@ vector<FECDatagram> IntraFrameFEC::encode(uint32_t frame_id, uint8_t* data, size
 
     // pad the last data packet
     int last_pkt_len = size - (info.k - 1) * info.size;
-    _padding = info.size - last_pkt_len;
+    int padding = info.size - last_pkt_len;
     memcpy(_data_buf[info.k - 1], data + (info.k - 1) * info.size, last_pkt_len);
-    memset(_data_buf[info.k - 1] + last_pkt_len, 0, _padding);
+    memset(_data_buf[info.k - 1] + last_pkt_len, 0, padding);
 
     jerasure.encode(_data_buf, _coding_buf);
 
     // create datagrams
     vector<FECDatagram> datagrams;
     for (int i = 0; i < info.k - 1; i++) {
-        datagrams.emplace_back(frame_id, FECType::DATA, i, info.k, string_view(_data_buf[i], info.size));
+        datagrams.emplace_back(frame_id, FECType::DATA, i, info.k, padding, string_view(_data_buf[i], info.size));
     }
     // unpad
-    datagrams.emplace_back(frame_id, FECType::DATA, info.k - 1, info.k, string_view(_data_buf[info.k - 1], last_pkt_len));
+    datagrams.emplace_back(frame_id, FECType::DATA, info.k - 1, info.k, padding, string_view(_data_buf[info.k - 1], last_pkt_len));
 
     for (int j = 0; j < info.m; j++) {
-        datagrams.emplace_back(frame_id, FECType::REPAIR, j, info.m, string_view(_coding_buf[j], info.size));
+        datagrams.emplace_back(frame_id, FECType::REPAIR, j, info.m, padding, string_view(_coding_buf[j], info.size));
     }
 
     return datagrams;
