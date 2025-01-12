@@ -85,7 +85,7 @@ void IntraFrameFEC::_check_buf(char**& buf, size_t& buf_k, size_t& buf_size, siz
         buf_size = buf_size < size ? 2 * size : buf_size;
         buf = (char**)malloc(buf_k * sizeof(char*));
         for (int i = 0; i < buf_k; i++) {
-            buf[i] = (char*)malloc(size);
+            buf[i] = (char*)malloc(buf_size);
         }
     }
 }

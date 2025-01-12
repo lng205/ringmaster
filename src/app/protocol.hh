@@ -40,7 +40,7 @@ struct Datagram
 
   // header size after serialization
   static constexpr size_t HEADER_SIZE = sizeof(uint32_t) +
-      sizeof(FrameType) + 2 * sizeof(uint16_t) + sizeof(uint64_t);
+      2 * sizeof(uint8_t) + 2 * sizeof(uint16_t) + sizeof(uint64_t);
 
   // maximum size for 'payload' (initialized in .cc and modified by set_mtu())
   static size_t max_payload;
