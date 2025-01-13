@@ -113,6 +113,7 @@ A collection of all the notes taken during the development of the project.
 - Use `extern "C" {}` to include C code in C++.
     - C++ code include extra information in the function name for overloading, which is not present in C.
     - The compiler will automatically add this to standard C libraries.
+- Use lock_gard<mutex> to automatically unlock the mutex when the lock_guard goes out of scope.
 
 ### Ringmaster
 
@@ -122,8 +123,21 @@ A collection of all the notes taken during the development of the project.
     - The lifetime of the buffer is managed by the libvpx encoder.
     - The buffer is only valid before another call to `vpx_codec_*` functions. (According to `vpx_codec_get_cx_data`).
 
+#### Decoder
+
+- Decoder has a local thread used for decode and display.
+    - The decoder thread share a queue of frames with the main thread.
+    - The decoder thread uses a producer-consumer model to wait for the main thread to push frames to the queue.
+        - The consumer uses condition_variable.wait(mtx, lambda), which will unlock the mutex, wait for a cv signal, and check the lambda condition.
+        If the lambda function returns false, the consumer will return to the waiting state.
 
 ### Padding
 
 - Padding is used to ensure that the data is aligned for fec encoding.
 - The padding on data can be removed after encoding, and added back before decoding.
+
+### Jeasure
+
+- The end of the erased array is marked by -1.
+    - The content of the erased array is the index of the erased data.
+    - Repair packets are indexed from k.
