@@ -25,38 +25,29 @@ class Frame
 public:
   Frame(const uint32_t frame_id,
         const FrameType frame_type,
-        const uint16_t frag_cnt);
-
-  // if the frame has fragment 'frag_id'
-  bool has_frag(const uint16_t frag_id) const;
-
-  // get fragment 'frag_id'
-  Datagram & get_frag(const uint16_t frag_id);
-  const Datagram & get_frag(const uint16_t frag_id) const;
+        const uint16_t frag_cnt,
+        const uint16_t repair_cnt,
+        const size_t padding_size);
 
   // insert a fragment into the frame
-  void insert_frag(const Datagram & datagram);
   void insert_frag(Datagram && datagram);
 
   // if the frame has received all fragments
-  bool complete() const { return null_frags_ == 0; }
+  bool complete() const { return frag_need_ <= 0; }
   std::optional<size_t> frame_size() const;
 
   // accessors
   uint32_t id() const { return id_; }
   FrameType type() const { return type_; }
-
-  std::vector<std::optional<Datagram>> & frags() { return frags_; }
   const std::vector<std::optional<Datagram>> & frags() const { return frags_; }
-
-  unsigned int null_frags() const { return null_frags_; }
 
 private:
   uint32_t id_;    // frame ID
   FrameType type_; // frame type
 
   std::vector<std::optional<Datagram>> frags_; // fragments of this frame
-  unsigned int null_frags_; // number of uninitialized fragments
+  int frag_need_; // frags required to decode fec
+  size_t padding_size_; // padding size
   size_t frame_size_ {0}; // frame size so far
 
   // validate if a datagram belongs to this frame
@@ -141,6 +132,9 @@ private:
   double decode_frame(vpx_codec_ctx_t & context, const Frame & frame);
   void display_decoded_frame(vpx_codec_ctx_t & context, VideoDisplay & display);
   void worker_main();
+
+  // fec
+  IntraFrameFEC fec_ {};
 };
 
 #endif /* DECODER_HH */

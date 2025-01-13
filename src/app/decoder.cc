@@ -15,27 +15,15 @@ using namespace chrono;
 
 Frame::Frame(const uint32_t frame_id,
              const FrameType frame_type,
-             const uint16_t frag_cnt)
-  : id_(frame_id), type_(frame_type), frags_(frag_cnt), null_frags_(frag_cnt)
+             const uint16_t frag_cnt,
+             const uint16_t repair_cnt,
+             const size_t padding_size)
+  : id_(frame_id), type_(frame_type), frags_(frag_cnt + repair_cnt),
+  frag_need_(frag_cnt), padding_size_(padding_size)
 {
   if (frag_cnt == 0) {
     throw runtime_error("frame cannot have zero fragments");
   }
-}
-
-bool Frame::has_frag(const uint16_t frag_id) const
-{
-  return frags_.at(frag_id).has_value();
-}
-
-Datagram & Frame::get_frag(const uint16_t frag_id)
-{
-  return frags_.at(frag_id).value();
-}
-
-const Datagram & Frame::get_frag(const uint16_t frag_id) const
-{
-  return frags_.at(frag_id).value();
 }
 
 optional<size_t> Frame::frame_size() const
@@ -50,22 +38,8 @@ optional<size_t> Frame::frame_size() const
 void Frame::validate_datagram(const Datagram & datagram) const
 {
   if (datagram.frame_id != id_ or
-      datagram.frame_type != type_ or
-      datagram.frag_id >= frags_.size() or
-      datagram.frag_cnt != frags_.size()) {
+      datagram.frame_type != type_) {
     throw runtime_error("unable to insert an incompatible datagram");
-  }
-}
-
-void Frame::insert_frag(const Datagram & datagram)
-{
-  validate_datagram(datagram);
-
-  // insert only if the datagram does not exist yet
-  if (not frags_[datagram.frag_id]) {
-    frame_size_ += datagram.payload.size();
-    null_frags_--;
-    frags_[datagram.frag_id] = datagram;
   }
 }
 
@@ -73,11 +47,16 @@ void Frame::insert_frag(Datagram && datagram)
 {
   validate_datagram(datagram);
 
+  uint pos = datagram.fec_type == FECType::DATA ?
+  datagram.frag_id : datagram.frag_id + datagram.frag_cnt;
+
   // insert only if the datagram does not exist yet
-  if (not frags_[datagram.frag_id]) {
-    frame_size_ += datagram.payload.size();
-    null_frags_--;
-    frags_[datagram.frag_id] = move(datagram);
+  if (not frags_[pos]) {
+    if (datagram.fec_type == FECType::DATA) {
+      frame_size_ += datagram.payload.size();
+    }
+    frag_need_--;
+    frags_[pos] = move(datagram);
   }
 }
 
@@ -115,6 +94,8 @@ bool Decoder::add_datagram_common(const Datagram & datagram)
   const auto frame_id = datagram.frame_id;
   const auto frame_type = datagram.frame_type;
   const auto frag_cnt = datagram.frag_cnt;
+  const auto repair_cnt = datagram.repair_cnt;
+  const auto padding = datagram.padding;
 
   // ignore any datagrams from the old frames
   if (frame_id < next_frame_) {
@@ -125,7 +106,8 @@ bool Decoder::add_datagram_common(const Datagram & datagram)
     // initialize a Frame instance for frame 'frame_id'
     frame_buf_.emplace(piecewise_construct,
                        forward_as_tuple(frame_id),
-                       forward_as_tuple(frame_id, frame_type, frag_cnt));
+                       forward_as_tuple(frame_id, frame_type, frag_cnt,
+                                        repair_cnt, padding));
   }
 
   return true;
@@ -137,10 +119,8 @@ void Decoder::add_datagram(Datagram && datagram)
     return;
   }
 
-  if (datagram.fec_type == FECType::DATA) {
-    // move the fragment into the frame
-    frame_buf_.at(datagram.frame_id).insert_frag(move(datagram));
-  }
+  // move the fragment into the frame
+  frame_buf_.at(datagram.frame_id).insert_frag(move(datagram));
 }
 
 bool Decoder::next_frame_complete()
@@ -256,30 +236,24 @@ double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
     throw runtime_error("frame must be complete before decoding");
   }
 
-  // allocate a decoding buffer once
-  static constexpr size_t MAX_DECODING_BUF = 1000000; // 1 MB
-  static vector<uint8_t> decode_buf(MAX_DECODING_BUF);
-
-  // copy the payload of the frame's datagrams to 'decode_buf'
-  uint8_t * buf_ptr = decode_buf.data();
-  const uint8_t * const buf_end = buf_ptr + decode_buf.size();
-
+  // fec decode
+  vector<optional<FECDatagram>> datagrams;
   for (const auto & datagram : frame.frags()) {
-    const string & payload = datagram.value().payload;
-
-    if (buf_ptr + payload.size() >= buf_end) {
-      throw runtime_error("frame size exceeds max decoding buffer size");
+    if (datagram) {
+      datagrams.emplace_back(make_optional<FECDatagram>(
+        datagram->frame_id, datagram->fec_type, datagram->frag_id,
+        datagram->frag_cnt, datagram->repair_cnt, datagram->padding,
+        datagram->payload
+      ));
+    } else {
+      datagrams.emplace_back(nullopt);
     }
-
-    memcpy(buf_ptr, payload.data(), payload.size());
-    buf_ptr += payload.size();
   }
-
-  const size_t frame_size = buf_ptr - decode_buf.data();
+  vector<uint8_t> decode_buf = fec_.decode(datagrams);
 
   // decode the compressed frame in 'decode_buf'
   const auto decode_start = steady_clock::now();
-  check_call(vpx_codec_decode(&context, decode_buf.data(), frame_size,
+  check_call(vpx_codec_decode(&context, decode_buf.data(), fec_.frame_size,
                               nullptr, 1),
              VPX_CODEC_OK, "failed to decode a frame");
   const auto decode_end = steady_clock::now();
