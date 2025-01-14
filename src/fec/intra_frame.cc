@@ -1,5 +1,6 @@
 #include <cstring>
 #include <iostream>
+#include <cmath>
 
 #include "intra_frame.hh"
 
@@ -22,6 +23,9 @@ std::ostream& operator<<(std::ostream& os, FECType& fec_type) {
     return os;
 }
 
+IntraFrameFEC::IntraFrameFEC(int max_payload, float redundancy) :
+_max_payload(max_payload), _redundancy(redundancy) {}
+
 IntraFrameFEC::~IntraFrameFEC() {
     if (_data_buf) {
         for (int i = 0; i < _data_buf_k; i++) {
@@ -37,8 +41,8 @@ IntraFrameFEC::~IntraFrameFEC() {
     }
 }
 
-vector<FECDatagram> IntraFrameFEC::encode(uint32_t frame_id, uint8_t* data, size_t size, int max_payload) {
-    Jerasure jerasure = _calc_fec_params(size, max_payload);
+vector<FECDatagram> IntraFrameFEC::encode(uint32_t frame_id, uint8_t* data, size_t size) {
+    Jerasure jerasure = _calc_fec_params(size);
     info = jerasure.get_info();
 
     _check_buf(_data_buf, _data_buf_k, _data_buf_size, info.k, info.size);
@@ -148,13 +152,12 @@ void IntraFrameFEC::_check_buf(char**& buf, size_t& buf_k, size_t& buf_size, siz
     }
 }
 
-Jerasure IntraFrameFEC::_calc_fec_params(size_t size, int max_payload) {
-    uint8_t k = static_cast<int>(int_div_ceil<size_t>(size, max_payload));
+Jerasure IntraFrameFEC::_calc_fec_params(size_t size) {
+    uint8_t k = static_cast<int>(int_div_ceil<size_t>(size, _max_payload));
     size_t packet_raw_size = int_div_ceil<size_t>(size, k);
     size_t packet_size = int_div_ceil<size_t>(packet_raw_size, SIZE_ALIGN) * SIZE_ALIGN;
 
-    // 50% redundancy
-    uint8_t m = k;
+    uint8_t m = ceil(k * _redundancy);
 
     return Jerasure({k, m, 8, packet_size});
 };

@@ -21,15 +21,22 @@ struct FECDatagram {
 
 class IntraFrameFEC {
 public:
+    IntraFrameFEC() {};
+    IntraFrameFEC(int max_payload, float redundancy);
     ~IntraFrameFEC();
-    vector<FECDatagram> encode(uint32_t frame_id, uint8_t* data, size_t size, int max_payload);
+    vector<FECDatagram> encode(uint32_t frame_id, uint8_t* data, size_t size);
     vector<uint8_t> decode(const vector<std::optional<FECDatagram>>& datagrams);
     CodingInfo info;
     size_t frame_size {};
+
+    // setters
+    void set_max_payload(int max_payload) { _max_payload = max_payload; }
+    void set_redundancy(float redundancy) { _redundancy = redundancy; }
 private:
-    Jerasure _calc_fec_params(size_t size, int max_payload);
+    Jerasure _calc_fec_params(size_t size);
     void _check_buf(char**& buf, size_t& buf_k, size_t& buf_size, size_t k, size_t size);
-    // void _check_buf(uint8_t*& buf, size_t& buf_size, size_t size);
+    int _max_payload;
+    float _redundancy;
     size_t _data_buf_k {};
     size_t _data_buf_size {};
     size_t _coding_buf_k {};

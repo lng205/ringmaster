@@ -19,7 +19,7 @@ Encoder::Encoder(const uint16_t display_width,
                  const uint16_t frame_rate,
                  const string & output_path)
   : display_width_(display_width), display_height_(display_height),
-    frame_rate_(frame_rate), output_fd_(), fec_()
+    frame_rate_(frame_rate), output_fd_(), fec_(Datagram::max_payload, 1)
 {
   // open the output file
   if (not output_path.empty()) {
@@ -208,7 +208,7 @@ size_t Encoder::packetize_encoded_frame()
       // FEC
       uint8_t * buf_ptr = static_cast<uint8_t *>(encoder_pkt->data.frame.buf);
       vector<FECDatagram> fec_datagrams = 
-      fec_.encode(frame_id_, buf_ptr, frame_size, Datagram::max_payload);
+      fec_.encode(frame_id_, buf_ptr, frame_size);
 
       for (FECDatagram & datagram : fec_datagrams) {
         send_buf_.emplace_back(frame_id_, frame_type, datagram.fec_type,
