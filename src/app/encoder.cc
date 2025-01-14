@@ -270,26 +270,26 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
     return;
   }
 
-  // retransmit all unacked datagrams before the acked one (backward)
-  for (auto rit = make_reverse_iterator(acked_it);
-       rit != unacked_.rend(); rit++) {
-    auto & datagram = rit->second;
+  // // retransmit all unacked datagrams before the acked one (backward)
+  // for (auto rit = make_reverse_iterator(acked_it);
+  //      rit != unacked_.rend(); rit++) {
+  //   auto & datagram = rit->second;
 
-    // skip if a datagram has been retransmitted MAX_NUM_RTX times
-    if (datagram.num_rtx >= MAX_NUM_RTX) {
-      continue;
-    }
+  //   // skip if a datagram has been retransmitted MAX_NUM_RTX times
+  //   if (datagram.num_rtx >= MAX_NUM_RTX) {
+  //     continue;
+  //   }
 
-    // retransmit if it's the first RTX or the last RTX was about one RTT ago
-    if (datagram.num_rtx == 0 or
-        curr_ts - datagram.last_send_ts > ewma_rtt_us_.value()) {
-      datagram.num_rtx++;
-      datagram.last_send_ts = curr_ts;
+  //   // retransmit if it's the first RTX or the last RTX was about one RTT ago
+  //   if (datagram.num_rtx == 0 or
+  //       curr_ts - datagram.last_send_ts > ewma_rtt_us_.value()) {
+  //     datagram.num_rtx++;
+  //     datagram.last_send_ts = curr_ts;
 
-      // retransmissions are more urgent
-      send_buf_.emplace_front(datagram);
-    }
-  }
+  //     // retransmissions are more urgent
+  //     send_buf_.emplace_front(datagram);
+  //   }
+  // }
 
   // finally, erase the acked datagram from 'unacked_'
   unacked_.erase(acked_it);
