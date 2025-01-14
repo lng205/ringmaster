@@ -19,7 +19,7 @@ Frame::Frame(const uint32_t frame_id,
              const uint16_t repair_cnt,
              const size_t padding_size)
   : id_(frame_id), type_(frame_type), frags_(frag_cnt + repair_cnt),
-  frag_need_(frag_cnt), padding_size_(padding_size)
+  frag_need_(frag_cnt), padding_size_(padding_size), frag_cnt_(frag_cnt)
 {
   if (frag_cnt == 0) {
     throw runtime_error("frame cannot have zero fragments");
@@ -187,6 +187,14 @@ void Decoder::consume_next_frame()
     last_stats_time_ += 1s;
   }
 
+  // push repaired fragments to the repaired queue
+  for (int i = 0; i < frame.frag_cnt(); i++) {
+    // access frags before its moved to the worker thread
+    if (!frame.frags()[i]) {
+      repaired_.emplace_back(frame.id(), i);
+    }
+  }
+
   if (lazy_level_ <= DECODE_ONLY) {
     // dispatch the frame to worker thread
     {
@@ -228,6 +236,13 @@ void Decoder::clean_up_to(const uint32_t frontier)
 
     it = frame_buf_.erase(it);
   }
+}
+
+vector<pair<uint32_t, uint16_t>> Decoder::get_repaired()
+{
+  auto temp = move(repaired_);
+  repaired_.clear();
+  return temp;
 }
 
 double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)

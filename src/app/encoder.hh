@@ -93,7 +93,8 @@ private:
 
   // constants
   static constexpr unsigned int MAX_NUM_RTX = 3;
-  static constexpr uint64_t MAX_UNACKED_US = 1000 * 1000; // 1 second
+  // static constexpr uint64_t MAX_UNACKED_US = 1000 * 1000; // 1 second
+  static constexpr uint64_t MAX_UNACKED_US = 200 * 1000; // 200 ms
 
   // track RTT
   void add_rtt_sample(const unsigned int rtt_us);

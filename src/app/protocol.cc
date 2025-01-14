@@ -111,6 +111,10 @@ AckMsg::AckMsg(const Datagram & datagram)
     send_ts(datagram.send_ts)
 {}
 
+AckMsg::AckMsg(const uint32_t _frame_id, const uint16_t _frag_id)
+  : Msg(Type::ACK), frame_id(_frame_id), frag_id(_frag_id), send_ts(0)
+{}
+
 size_t AckMsg::serialized_size() const
 {
   return Msg::serialized_size() + sizeof(uint16_t) + sizeof(uint32_t)

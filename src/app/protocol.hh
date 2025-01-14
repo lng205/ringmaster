@@ -85,6 +85,9 @@ struct AckMsg : Msg
   AckMsg() : Msg(Type::ACK) {}
   AckMsg(const Datagram & datagram);
 
+  // leave send_ts to 0 if the datagram is repaired
+  AckMsg(uint32_t frame_id, uint16_t frag_id);
+
   uint32_t frame_id {}; // frame ID
   uint16_t frag_id {};  // fragment ID in this frame
   uint64_t send_ts {};  // timestamp (us) on sender when the datagram was sent
@@ -108,5 +111,4 @@ struct ConfigMsg : Msg
   size_t serialized_size() const override;
   std::string serialize_to_string() const override;
 };
-
 #endif /* PROTOCOL_HH */

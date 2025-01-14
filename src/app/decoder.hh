@@ -40,6 +40,7 @@ public:
   uint32_t id() const { return id_; }
   FrameType type() const { return type_; }
   const std::vector<std::optional<Datagram>> & frags() const { return frags_; }
+  uint16_t frag_cnt() const { return frag_cnt_; }
 
 private:
   uint32_t id_;    // frame ID
@@ -49,6 +50,7 @@ private:
   int frag_need_; // frags required to decode fec
   size_t padding_size_; // padding size
   size_t frame_size_ {0}; // frame size so far
+  uint16_t frag_cnt_; // total data fragments
 
   // validate if a datagram belongs to this frame
   void validate_datagram(const Datagram & datagram) const;
@@ -88,6 +90,8 @@ public:
   const Decoder & operator=(const Decoder & other) = delete;
   Decoder(Decoder && other) = delete;
   Decoder & operator=(Decoder && other) = delete;
+
+  vector<pair<uint32_t, uint16_t>> get_repaired();
 
 private:
   // initialized before worker thread starts and won't be modified again
@@ -135,6 +139,7 @@ private:
 
   // fec
   IntraFrameFEC fec_ {};
+  vector<pair<uint32_t, uint16_t>> repaired_ {};
 };
 
 #endif /* DECODER_HH */

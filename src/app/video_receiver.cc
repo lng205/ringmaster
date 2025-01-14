@@ -128,6 +128,17 @@ int main(int argc, char * argv[])
     while (decoder.next_frame_complete()) {
       // depending on the lazy level, might decode and display the next frame
       decoder.consume_next_frame();
+
+      // send repaired lost data packets
+      for (auto pair : decoder.get_repaired()) {
+        AckMsg repair_msg(pair.first, pair.second);
+        udp_sock.send(repair_msg.serialize_to_string());
+
+        if (verbose) {
+          cerr << "Sent repair: frame_id=" << pair.first
+              << " frag_id=" << pair.second << endl;
+        }
+      }
     }
   }
 

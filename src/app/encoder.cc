@@ -240,7 +240,9 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
   const auto curr_ts = timestamp_us();
 
   // observed an RTT sample
-  add_rtt_sample(curr_ts - ack->send_ts);
+  if (ack->send_ts > 0) {
+    add_rtt_sample(curr_ts - ack->send_ts);
+  }
 
   // find the acked datagram in 'unacked_'
   const auto acked_seq_num = make_pair(ack->frame_id, ack->frag_id);
@@ -250,6 +252,8 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
     // do nothing else if ACK is not for an unacked datagram
     return;
   }
+
+  // [TODO] decodable frames with out-of-order acks will still be retransmitted
 
   // retransmit all unacked datagrams before the acked one (backward)
   for (auto rit = make_reverse_iterator(acked_it);
