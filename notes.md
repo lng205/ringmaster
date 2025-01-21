@@ -84,6 +84,11 @@ A collection of all the notes taken during the development of the project.
     - (Optional) May need to install the font 'Times New Roman' for the plot.
         - Use `python3 -c "import matplotlib as mpl; print(mpl.matplotlib_fname())"` to find the matplotlibrc cache and clear it.
 
+#### Channel
+
+- Tambur uses a custom GE program to simulate the GE channel.
+- Tambur calls the GE obj in the encoder. If the channel will discard the packet, the encoded packet will not be sent instead.
+
 #### Calling Chain
 
 - Encoder -> fec_sender -> frame_generator -> StreamCode -> BlockCode -> jerasure_matrix_encode
@@ -107,6 +112,9 @@ A collection of all the notes taken during the development of the project.
     TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
     ```
     - The address pointing to the host outside all containers can be accessed by the env var `MAHIMAHI_BASE` in the shell.
+- MAHIMAHI(1) is the command-line interface for mahimahi.
+- mm-link is used to emulate the bandwidth for the network and is not suitable for packet loss.
+- mm-intermittent and mm-onoff can simulate a network switching between connected and disconnected states.
 
 ### C++
 
