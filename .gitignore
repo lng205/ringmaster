@@ -1,4 +1,10 @@
+# Cmake
 build/
+
 *.y4m
 .vscode/
 *.log
+
+# Python
+venv/
+__pycache__/
