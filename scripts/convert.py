@@ -9,9 +9,7 @@ np.set_printoptions(threshold=np.inf, linewidth=np.inf)
 
 GF = galois.GF(2)
 
-L = 3
-
-def test():
+def test(L):
     m = Van(2, 4, L - 1)
     c = CyclicMatrix(L)
 
@@ -40,5 +38,24 @@ def test():
     print("Zero padding + encoding + decoding:")
     print(res)
 
+def test_paper():
+    # Example from the paper
+    
+    L = 5
+    m = np.array([
+        [1, 1, 1, 1],
+        [0, 1, 2, 4]
+    ])
+    c = CyclicMatrix(L)
+    h = HelperMatrix(2, L)
+    
+    t2 = [2, 3]
+
+    e_alpha = m[:, t2]
+    d_alpha = np.linalg.inv(galois.GF(2**4, irreducible_poly=[1]*5)(e_alpha))
+
+    print(d_alpha)
+
 if __name__ == "__main__":
-    test()
+    test(5)
+    # test_paper()

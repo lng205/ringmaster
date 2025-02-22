@@ -16,7 +16,7 @@ class Van:
         assert m - k <= order # the field should be large enough
 
         self.m, self.k, self.order = m, k, order
-        self.GF = galois.GF(2**order)
+        self.GF = galois.GF(2**order, irreducible_poly=[1]*(order + 1))
         self.a = self.GF('x')
         self.M = self._vander(m, k - m)
 
@@ -27,8 +27,8 @@ class Van:
                 vander[i, j] = self.a**(i*(j+1))
 
         # Concatenate the Vandermonde matrix with the identity matrix
-        M = np.eye(rows, dtype=int) # the ref example uses 1 - I
-        M = np.concatenate((1 - M, vander), axis=1)
+        M = np.eye(rows, dtype=int)
+        M = np.concatenate((M, vander), axis=1) # the ref example uses 1 - I
         return M
 
     def invert(self, cols: list) -> np.ndarray:
