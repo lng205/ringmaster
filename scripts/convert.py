@@ -9,25 +9,27 @@ np.set_printoptions(threshold=np.inf, linewidth=np.inf)
 
 GF = galois.GF(2)
 
-def test(L):
-    m = Van(2, 4, L - 1)
+def test(m, k, L):
+    van = Van(m, k, L - 1)
     c = CyclicMatrix(L)
 
-    # u3, u4, t6
-    packets = [2, 3]
+    packets = np.random.choice(k, m, replace=False)
+    print("The chosen packets:")
+    print(packets)
+    print()
 
-    encode = c.convert_matrix(m.M)
+    encode = c.convert_matrix(van.M)
     print("The encoding matrix:")
     print(encode)
     print()
 
-    e_alpha = m.M[:, packets]
+    e_alpha = van.M[:, packets]
     e = c.convert_matrix(e_alpha)
 
-    d_alpha = m.invert(packets)
+    d_alpha = van.invert(packets)
     d = c.convert_matrix(d_alpha)
 
-    h = HelperMatrix(2, L)
+    h = HelperMatrix(m, L)
     decode = GF(d) @ GF(h.op)
     print("The decoding matrix:")
     print(decode)
@@ -57,5 +59,5 @@ def test_paper():
     print(d_alpha)
 
 if __name__ == "__main__":
-    test(5)
+    test(3, 5, 11)
     # test_paper()
