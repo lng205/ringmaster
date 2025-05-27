@@ -26,3 +26,14 @@ cmake --build build
 
 测试视频：[ice_4cif_30fps.y4m](https://media.xiph.org/video/derf/y4m/ice_4cif_30fps.y4m)
 （该域名同时也提供其他测试视频）
+
+## 使用FEC
+
+1. 安装[mahimahi](http://mahimahi.mit.edu/)
+   - 发布源中没有Ubuntu24.04的包，需要手动编译
+   - WSL2的默认内核发布版缺少相关模块`CONNMARK`，建议使用完整Linux系统
+   - 也可使用其他网络模拟工具
+
+2. 使用`mm-delay 50`模拟50ms的延迟，使用`mm-loss 0.1`模拟10%的丢包率。
+
+3. 使用`./build/receiver 10.0.0.2 12345 704 576 --fps 30 --cbr 500`模拟接收端。
