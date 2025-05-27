@@ -1,65 +1,28 @@
 # Ringmaster
 
-Ringmaster is a videoconferencing research platform open-sourced along with our paper
-published at NSDI '23 — [Tambur: Efficient loss recovery for videoconferencing via streaming
-codes](https://www.usenix.org/conference/nsdi23/presentation/rudow), where
-Ringmaster serves as the basis for developing and benchmarking forward error
-correction (FEC) schemes in videoconferencing released [here](https://github.com/Thesys-lab/tambur).
+[Ringmaster](https://github.com/microsoft/ringmaster) 是一个视频会议研究平台，由微软研究院开发。本项目在Ringmaster的基础上，实现了FEC（Forward Error Correction）方案。
 
-Ringmaster is designed to be a readable and extensible replacement for WebRTC in videoconferencing
-research, with the goal of supporting more use cases in the future
-(e.g., congestion control, multiparty conferencing). [Contributions](#contributing) are welcome.
+## 使用方法
 
-See [below](#emulating-a-video-call) for the basic usage of Ringmaster that emulates a 1:1
-video call. For any questions, please contact the owner [Francis Yan](https://francisyyan.org).
-
-## Dependencies
-- Required environment: Ubuntu >=18.04
-- Install required packages
-   ```
-   sudo apt install libvpx-dev libsdl2-dev libjerasure-dev
-   ```
-
-## Building
-Compile Ringmaster with
+1. 安装依赖
 ```
-cmake build -S src -B build
+sudo apt install libvpx-dev libsdl2-dev libjerasure-dev
+```
+
+2. 编译
+```
+cmake -S src -B build
 cmake --build build
 ```
 
-## Emulating a video call
-Download a sample raw video
-[ice_4cif_30fps.y4m](https://media.xiph.org/video/derf/y4m/ice_4cif_30fps.y4m),
-which has a resolution of 704x576 and a frame rate of 30 fps.
-
-Next, go to `src/app` and execute the following commands in two terminals, respectively
-(run them without any arguments to see the usage):
+3. 运行
 ```
-./video_sender 12345 ice_4cif_30fps.y4m
-./video_receiver 127.0.0.1 12345 704 576 --fps 30 --cbr 500
+./build/sender 12345 ice_4cif_30fps.y4m
+./build/receiver 127.0.0.1 12345 704 576 --fps 30 --cbr 500
 ```
-This emulates a 1:1 video call, where the caller compresses the raw video into VP9-encoded
-video frames with an average bitrate of 500 kbps and transmits the packetized frames to the
-callee over UDP.
 
-## Contributing
+这模拟了一次1:1的视频通话，发送端压缩视频帧并发送，接收端解码视频帧并显示。
+输入的视频格式为y4m，分辨率为704x576，帧率为30fps。编码方式为VP9，码率为500kbps。
 
-This project welcomes contributions and suggestions.  Most contributions require you to agree to a
-Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
-the rights to use your contribution. For details, visit https://cla.opensource.microsoft.com.
-
-When you submit a pull request, a CLA bot will automatically determine whether you need to provide
-a CLA and decorate the PR appropriately (e.g., status check, comment). Simply follow the instructions
-provided by the bot. You will only need to do this once across all repos using our CLA.
-
-This project has adopted the [Microsoft Open Source Code of Conduct](https://opensource.microsoft.com/codeofconduct/).
-For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
-contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
-
-## Trademarks
-
-This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
-trademarks or logos is subject to and must follow
-[Microsoft's Trademark & Brand Guidelines](https://www.microsoft.com/en-us/legal/intellectualproperty/trademarks/usage/general).
-Use of Microsoft trademarks or logos in modified versions of this project must not cause confusion or imply Microsoft sponsorship.
-Any use of third-party trademarks or logos are subject to those third-party's policies.
+测试视频：[ice_4cif_30fps.y4m](https://media.xiph.org/video/derf/y4m/ice_4cif_30fps.y4m)
+（该域名同时也提供其他测试视频）
