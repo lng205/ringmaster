@@ -4,6 +4,8 @@
 
 对代码实现的细节分析请参考[wiki](https://github.com/lng205/ringmaster/wiki/系统架构)
 
+[这里](https://github.com/lng205/ringmaster/tree/cyclicShift/scripts)提供了探索循环移位编码的脚本。
+
 ## 使用方法
 
 1. 安装依赖
