@@ -2,6 +2,8 @@
 
 [Ringmaster](https://github.com/microsoft/ringmaster) 是一个视频会议研究平台，由微软研究院开发。本项目在Ringmaster的基础上，实现了FEC（Forward Error Correction）方案。
 
+对代码实现的细节分析请参考[wiki](https://github.com/lng205/ringmaster/wiki/系统架构)
+
 ## 使用方法
 
 1. 安装依赖
