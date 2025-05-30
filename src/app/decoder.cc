@@ -245,7 +245,7 @@ vector<pair<uint32_t, uint16_t>> Decoder::get_repaired()
   return temp;
 }
 
-double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
+double Decoder::decode_frame(AVCodecContext* codec_ctx, const Frame & frame)
 {
   if (not frame.complete()) {
     throw runtime_error("frame must be complete before decoding");
@@ -268,33 +268,38 @@ double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
 
   // decode the compressed frame in 'decode_buf'
   const auto decode_start = steady_clock::now();
-  check_call(vpx_codec_decode(&context, decode_buf.data(), fec_.frame_size,
-                              nullptr, 1),
-             VPX_CODEC_OK, "failed to decode a frame");
-  const auto decode_end = steady_clock::now();
+  
+  AVPacket* packet = av_packet_alloc();
+  if (!packet) {
+    throw runtime_error("Could not allocate packet for decoding");
+  }
 
+  packet->data = decode_buf.data();
+  packet->size = decode_buf.size();
+
+  int ret = avcodec_send_packet(codec_ctx, packet);
+  if (ret < 0) {
+    av_packet_free(&packet);
+    char errbuf[AV_ERROR_MAX_STRING_SIZE];
+    av_strerror(ret, errbuf, AV_ERROR_MAX_STRING_SIZE);
+    throw runtime_error("Error sending packet to decoder: " + string(errbuf));
+  }
+
+  av_packet_free(&packet);
+  
+  const auto decode_end = steady_clock::now();
   return duration<double, milli>(decode_end - decode_start).count();
 }
 
-void Decoder::display_decoded_frame(vpx_codec_ctx_t & context,
-                                    VideoDisplay & display)
+void Decoder::display_decoded_frame(AVCodecContext* codec_ctx, AVFrame* frame, VideoDisplay & display)
 {
-  vpx_codec_iter_t iter = nullptr;
-  vpx_image * raw_img;
-  unsigned int frame_decoded = 0;
-
-  // display the decoded frame stored in 'context_'
-  while ((raw_img = vpx_codec_get_frame(&context, &iter))) {
-    frame_decoded++;
-
-    // there should be exactly one frame decoded
-    if (frame_decoded > 1) {
-      throw runtime_error("Multiple frames were decoded at once");
-    }
-
-    // construct a temporary RawImage that does not own the raw_img
-    display.show_frame(RawImage(raw_img));
+  // Receive decoded frame
+  int ret = avcodec_receive_frame(codec_ctx, frame);
+  if (ret == 0) {
+    // Successfully received a frame, display it
+    display.show_frame(RawImage(frame));
   }
+  // If ret == AVERROR(EAGAIN), no frame available yet, which is normal
 }
 
 void Decoder::worker_main()
@@ -304,16 +309,47 @@ void Decoder::worker_main()
     return;
   }
 
-  // initialize a VP9 decoding context
-  const unsigned int max_threads = min(get_nprocs(), 4);
-  vpx_codec_dec_cfg_t cfg {max_threads, display_width_, display_height_};
+  // initialize H265 decoding context
+  const AVCodec* codec = avcodec_find_decoder(AV_CODEC_ID_H265);
+  if (!codec) {
+    throw runtime_error("H265 decoder not found");
+  }
 
-  vpx_codec_ctx_t context;
-  check_call(vpx_codec_dec_init(&context, &vpx_codec_vp9_dx_algo, &cfg, 0),
-             VPX_CODEC_OK, "vpx_codec_dec_init");
+  AVCodecContext* codec_ctx = avcodec_alloc_context3(codec);
+  if (!codec_ctx) {
+    throw runtime_error("Could not allocate video codec context");
+  }
 
-  cerr << "[worker] Initialized decoder (max threads: "
-       << max_threads << ")" << endl;
+  // Set decoder parameters
+  codec_ctx->width = display_width_;
+  codec_ctx->height = display_height_;
+  codec_ctx->pix_fmt = AV_PIX_FMT_YUV420P;
+
+  int ret = avcodec_open2(codec_ctx, codec, nullptr);
+  if (ret < 0) {
+    char errbuf[AV_ERROR_MAX_STRING_SIZE];
+    av_strerror(ret, errbuf, AV_ERROR_MAX_STRING_SIZE);
+    avcodec_free_context(&codec_ctx);
+    throw runtime_error("Could not open codec: " + string(errbuf));
+  }
+
+  // Allocate frame for decoded data
+  AVFrame* frame = av_frame_alloc();
+  if (!frame) {
+    avcodec_free_context(&codec_ctx);
+    throw runtime_error("Could not allocate video frame");
+  }
+
+  // Allocate packet for input data
+  AVPacket* packet = av_packet_alloc();
+  if (!packet) {
+    av_frame_free(&frame);
+    avcodec_free_context(&codec_ctx);
+    throw runtime_error("Could not allocate packet");
+  }
+
+  cerr << "[worker] Initialized H265 decoder (resolution: "
+       << display_width_ << "x" << display_height_ << ")" << endl;
 
   // video display
   unique_ptr<VideoDisplay> display;
@@ -350,19 +386,19 @@ void Decoder::worker_main()
 
     // now worker can take its time to decode and render the frames kept locally
     while (not local_queue.empty()) {
-      const Frame & frame = local_queue.front();
-      const double decode_time_ms = decode_frame(context, frame);
+      const Frame & frame_data = local_queue.front();
+      const double decode_time_ms = decode_frame(codec_ctx, frame_data);
 
       if (output_fd_) {
         const auto frame_decoded_ts = timestamp_us();
 
-        output_fd_->write(to_string(frame.id()) + "," +
-                          to_string(frame.frame_size().value()) + "," +
+        output_fd_->write(to_string(frame_data.id()) + "," +
+                          to_string(frame_data.frame_size().value()) + "," +
                           to_string(frame_decoded_ts) + "\n");
       }
 
       if (display) {
-        display_decoded_frame(context, *display);
+        display_decoded_frame(codec_ctx, frame, *display);
       }
 
       local_queue.pop_front();
@@ -391,5 +427,8 @@ void Decoder::worker_main()
     }
   }
 
-  check_call(vpx_codec_destroy(&context), VPX_CODEC_OK, "vpx_codec_destroy");
+  // Cleanup
+  av_packet_free(&packet);
+  av_frame_free(&frame);
+  avcodec_free_context(&codec_ctx);
 }

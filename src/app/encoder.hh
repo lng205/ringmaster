@@ -2,8 +2,10 @@
 #define ENCODER_HH
 
 extern "C" {
-#include <vpx/vpx_encoder.h>
-#include <vpx/vp8cx.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/opt.h>
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
 }
 
 #include <deque>
@@ -19,7 +21,7 @@ extern "C" {
 class Encoder
 {
 public:
-  // initialize a VP9 encoder
+  // initialize a H265 encoder
   Encoder(const uint16_t display_width,
           const uint16_t display_height,
           const uint16_t frame_rate,
@@ -68,9 +70,12 @@ private:
   // current target bitrate
   unsigned int target_bitrate_ {0};
 
-  // VPX encoding configuration and context
-  vpx_codec_enc_cfg_t cfg_ {};
-  vpx_codec_ctx_t context_ {};
+  // FFmpeg H265 encoding context and structures
+  const AVCodec* codec_;
+  AVCodecContext* codec_ctx_;
+  AVFrame* frame_;
+  AVPacket* packet_;
+  SwsContext* sws_ctx_;
 
   // frame ID to encode
   uint32_t frame_id_ {0};
@@ -102,16 +107,8 @@ private:
   // encode the raw frame stored in 'raw_img'
   void encode_frame(const RawImage & raw_img);
 
-  // packetize the just encoded frame (stored in context_) and return its size
+  // packetize the just encoded frame and return its size
   size_t packetize_encoded_frame();
-
-  // VPX API wrappers
-  template <typename ... Args>
-  inline void codec_control(Args && ... args)
-  {
-    check_call(vpx_codec_control_(std::forward<Args>(args)...),
-               VPX_CODEC_OK, "vpx_codec_control_");
-  }
 
   // FEC
   IntraFrameFEC fec_;

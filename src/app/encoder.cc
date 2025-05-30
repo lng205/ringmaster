@@ -19,7 +19,8 @@ Encoder::Encoder(const uint16_t display_width,
                  const uint16_t frame_rate,
                  const string & output_path)
   : display_width_(display_width), display_height_(display_height),
-    frame_rate_(frame_rate), output_fd_(), fec_(Datagram::max_payload, 1)
+    frame_rate_(frame_rate), output_fd_(), fec_(Datagram::max_payload, 1),
+    codec_(nullptr), codec_ctx_(nullptr), frame_(nullptr), packet_(nullptr), sws_ctx_(nullptr)
 {
   // open the output file
   if (not output_path.empty()) {
@@ -27,77 +28,86 @@ Encoder::Encoder(const uint16_t display_width,
         open(output_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644)));
   }
 
-  // populate VP9 configuration with default values
-  check_call(vpx_codec_enc_config_default(&vpx_codec_vp9_cx_algo, &cfg_, 0),
-             VPX_CODEC_OK, "vpx_codec_enc_config_default");
+  // Find H265 encoder
+  codec_ = avcodec_find_encoder(AV_CODEC_ID_H265);
+  if (!codec_) {
+    throw runtime_error("H265 encoder not found");
+  }
 
-  // copy the configuration below mostly from WebRTC (libvpx_vp9_encoder.cc)
-  cfg_.g_w = display_width_;
-  cfg_.g_h = display_height_;
-  cfg_.g_timebase.num = 1;
-  cfg_.g_timebase.den = frame_rate_; // WebRTC uses a 90 kHz clock
-  cfg_.g_pass = VPX_RC_ONE_PASS;
-  cfg_.g_lag_in_frames = 0; // disable lagged encoding
-  // WebRTC disables error resilient mode unless for SVC
-  cfg_.g_error_resilient = VPX_ERROR_RESILIENT_DEFAULT;
-  cfg_.g_threads = 4; // encoder threads; should equal to column tiles below
-  cfg_.rc_resize_allowed = 0; // WebRTC enables spatial sampling
-  cfg_.rc_dropframe_thresh = 0; // WebRTC sets to 30 (% of target data buffer)
-  cfg_.rc_buf_initial_sz = 500;
-  cfg_.rc_buf_optimal_sz = 600;
-  cfg_.rc_buf_sz = 1000;
-  cfg_.rc_min_quantizer = 2;
-  cfg_.rc_max_quantizer = 52;
-  cfg_.rc_undershoot_pct = 50;
-  cfg_.rc_overshoot_pct = 50;
+  // Allocate codec context
+  codec_ctx_ = avcodec_alloc_context3(codec_);
+  if (!codec_ctx_) {
+    throw runtime_error("Could not allocate video codec context");
+  }
 
-  // prevent libvpx encoder from automatically placing key frames
-  cfg_.kf_mode = VPX_KF_DISABLED;
-  // WebRTC sets the two values below to 3000 frames (fixed keyframe interval)
-  cfg_.kf_max_dist = numeric_limits<unsigned int>::max();
-  cfg_.kf_min_dist = 0;
+  // Set encoder parameters
+  codec_ctx_->bit_rate = target_bitrate_ * 1000; // convert kbps to bps
+  codec_ctx_->width = display_width_;
+  codec_ctx_->height = display_height_;
+  codec_ctx_->time_base = {1, static_cast<int>(frame_rate_)};
+  codec_ctx_->framerate = {static_cast<int>(frame_rate_), 1};
+  codec_ctx_->gop_size = numeric_limits<int>::max(); // disable keyframes for now
+  codec_ctx_->max_b_frames = 0; // disable B-frames for low latency
+  codec_ctx_->pix_fmt = AV_PIX_FMT_YUV420P;
 
-  cfg_.rc_end_usage = VPX_CBR;
-  cfg_.rc_target_bitrate = target_bitrate_;
+  // Set H265 specific options for real-time encoding
+  av_opt_set(codec_ctx_->priv_data, "preset", "ultrafast", 0);
+  av_opt_set(codec_ctx_->priv_data, "tune", "zerolatency", 0);
+  av_opt_set(codec_ctx_->priv_data, "crf", "23", 0); // constant rate factor
 
-  // use no more than 16 or the number of avaialble CPUs
-  const unsigned int cpu_used = min(get_nprocs(), 16);
+  // Open codec
+  int ret = avcodec_open2(codec_ctx_, codec_, nullptr);
+  if (ret < 0) {
+    char errbuf[AV_ERROR_MAX_STRING_SIZE];
+    av_strerror(ret, errbuf, AV_ERROR_MAX_STRING_SIZE);
+    throw runtime_error("Could not open codec: " + string(errbuf));
+  }
 
-  // more encoder settings
-  check_call(vpx_codec_enc_init(&context_, &vpx_codec_vp9_cx_algo, &cfg_, 0),
-             VPX_CODEC_OK, "vpx_codec_enc_init");
+  // Allocate frame
+  frame_ = av_frame_alloc();
+  if (!frame_) {
+    throw runtime_error("Could not allocate video frame");
+  }
+  frame_->format = codec_ctx_->pix_fmt;
+  frame_->width = codec_ctx_->width;
+  frame_->height = codec_ctx_->height;
 
-  // this value affects motion estimation and *dominates* the encoding speed
-  codec_control(&context_, VP8E_SET_CPUUSED, cpu_used);
+  ret = av_frame_get_buffer(frame_, 0);
+  if (ret < 0) {
+    throw runtime_error("Could not allocate the video frame data");
+  }
 
-  // enable encoder to skip static/low content blocks
-  codec_control(&context_, VP8E_SET_STATIC_THRESHOLD, 1);
+  // Allocate packet
+  packet_ = av_packet_alloc();
+  if (!packet_) {
+    throw runtime_error("Could not allocate packet");
+  }
 
-  // clamp the max bitrate of a keyframe to 900% of average per-frame bitrate
-  codec_control(&context_, VP8E_SET_MAX_INTRA_BITRATE_PCT, 900);
+  // Initialize software scaler for YUV420P conversion
+  sws_ctx_ = sws_getContext(display_width_, display_height_, AV_PIX_FMT_YUV420P,
+                           display_width_, display_height_, AV_PIX_FMT_YUV420P,
+                           SWS_BILINEAR, nullptr, nullptr, nullptr);
+  if (!sws_ctx_) {
+    throw runtime_error("Could not initialize the conversion context");
+  }
 
-  // enable encoder to adaptively change QP for each segment within a frame
-  codec_control(&context_, VP9E_SET_AQ_MODE, 3);
-
-  // set the number of column tiles in encoding a frame to 2 ** 2 = 4
-  codec_control(&context_, VP9E_SET_TILE_COLUMNS, 2);
-
-  // enable row-based multi-threading
-  codec_control(&context_, VP9E_SET_ROW_MT, 1);
-
-  // disable frame parallel decoding
-  codec_control(&context_, VP9E_SET_FRAME_PARALLEL_DECODING, 0);
-
-  // enable denoiser (but not on ARM since optimization is pending)
-  codec_control(&context_, VP9E_SET_NOISE_SENSITIVITY, 1);
-
-  cerr << "Initialized VP9 encoder (CPU used: " << cpu_used << ")" << endl;
+  cerr << "Initialized H265 encoder (resolution: " << display_width_ 
+       << "x" << display_height_ << ", fps: " << frame_rate_ << ")" << endl;
 }
 
 Encoder::~Encoder()
 {
-  if (vpx_codec_destroy(&context_) != VPX_CODEC_OK) {
-    cerr << "~Encoder(): failed to destroy VPX encoder context" << endl;
+  if (packet_) {
+    av_packet_free(&packet_);
+  }
+  if (frame_) {
+    av_frame_free(&frame_);
+  }
+  if (codec_ctx_) {
+    avcodec_free_context(&codec_ctx_);
+  }
+  if (sws_ctx_) {
+    sws_freeContext(sws_ctx_);
   }
 }
 
@@ -134,7 +144,7 @@ void Encoder::encode_frame(const RawImage & raw_img)
   }
 
   // check if a key frame needs to be encoded
-  vpx_enc_frame_flags_t encode_flags = 0; // normal frame
+  bool force_keyframe = false;
   if (not unacked_.empty()) {
     const auto & first_unacked = unacked_.cbegin()->second;
 
@@ -142,7 +152,7 @@ void Encoder::encode_frame(const RawImage & raw_img)
     const auto us_since_first_send = timestamp_us() - first_unacked.send_ts;
 
     if (us_since_first_send > MAX_UNACKED_US) {
-      encode_flags = VPX_EFLAG_FORCE_KF; // force next frame to be key frame
+      force_keyframe = true;
 
       cerr << "* Recovery: gave up retransmissions and forced a key frame "
            << frame_id_ << endl;
@@ -160,11 +170,57 @@ void Encoder::encode_frame(const RawImage & raw_img)
     }
   }
 
+  // Copy raw image data to AVFrame
+  const auto& y_plane = raw_img.y();
+  const auto& u_plane = raw_img.u();
+  const auto& v_plane = raw_img.v();
+
+  // Make sure frame is writable
+  int ret = av_frame_make_writable(frame_);
+  if (ret < 0) {
+    throw runtime_error("Could not make frame writable");
+  }
+
+  // Copy Y plane
+  for (int y = 0; y < display_height_; y++) {
+    memcpy(frame_->data[0] + y * frame_->linesize[0],
+           y_plane.data() + y * display_width_,
+           display_width_);
+  }
+
+  // Copy U plane  
+  for (int y = 0; y < display_height_ / 2; y++) {
+    memcpy(frame_->data[1] + y * frame_->linesize[1],
+           u_plane.data() + y * (display_width_ / 2),
+           display_width_ / 2);
+  }
+
+  // Copy V plane
+  for (int y = 0; y < display_height_ / 2; y++) {
+    memcpy(frame_->data[2] + y * frame_->linesize[2],
+           v_plane.data() + y * (display_width_ / 2),
+           display_width_ / 2);
+  }
+
+  frame_->pts = frame_id_;
+
+  // Force keyframe if needed
+  if (force_keyframe) {
+    frame_->pict_type = AV_PICTURE_TYPE_I;
+  } else {
+    frame_->pict_type = AV_PICTURE_TYPE_NONE;
+  }
+
   // encode a frame and calculate encoding time
   const auto encode_start = steady_clock::now();
-  check_call(vpx_codec_encode(&context_, raw_img.get_vpx_image(), frame_id_, 1,
-                              encode_flags, VPX_DL_REALTIME),
-             VPX_CODEC_OK, "failed to encode a frame");
+  
+  ret = avcodec_send_frame(codec_ctx_, frame_);
+  if (ret < 0) {
+    char errbuf[AV_ERROR_MAX_STRING_SIZE];
+    av_strerror(ret, errbuf, AV_ERROR_MAX_STRING_SIZE);
+    throw runtime_error("Error sending frame for encoding: " + string(errbuf));
+  }
+
   const auto encode_end = steady_clock::now();
   const double encode_time_ms = duration<double, milli>(
                                 encode_end - encode_start).count();
@@ -177,45 +233,44 @@ void Encoder::encode_frame(const RawImage & raw_img)
 
 size_t Encoder::packetize_encoded_frame()
 {
-  // read the encoded frame's "encoder packets" from 'context_'
-  const vpx_codec_cx_pkt_t * encoder_pkt;
-  vpx_codec_iter_t iter = nullptr;
-  unsigned int frames_encoded = 0;
   size_t frame_size = 0;
+  
+  // Receive encoded packets from encoder
+  while (true) {
+    int ret = avcodec_receive_packet(codec_ctx_, packet_);
+    if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF) {
+      break; // No more packets available or need more input
+    } else if (ret < 0) {
+      char errbuf[AV_ERROR_MAX_STRING_SIZE];
+      av_strerror(ret, errbuf, AV_ERROR_MAX_STRING_SIZE);
+      throw runtime_error("Error receiving packet: " + string(errbuf));
+    }
 
-  while ((encoder_pkt = vpx_codec_get_cx_data(&context_, &iter))) {
-    if (encoder_pkt->kind == VPX_CODEC_CX_FRAME_PKT) {
-      frames_encoded++;
+    frame_size = packet_->size;
+    assert(frame_size > 0);
 
-      // there should be exactly one frame encoded
-      if (frames_encoded > 1) {
-        throw runtime_error("Multiple frames were encoded at once");
-      }
+    // Determine frame type (keyframe or not)
+    auto frame_type = FrameType::NONKEY;
+    if (packet_->flags & AV_PKT_FLAG_KEY) {
+      frame_type = FrameType::KEY;
 
-      frame_size = encoder_pkt->data.frame.sz;
-      assert(frame_size > 0);
-
-      // read the returned frame type
-      auto frame_type = FrameType::NONKEY;
-      if (encoder_pkt->data.frame.flags & VPX_FRAME_IS_KEY) {
-        frame_type = FrameType::KEY;
-
-        if (verbose_) {
-          cerr << "Encoded a key frame: frame_id=" << frame_id_ << endl;
-        }
-      }
-
-      // FEC
-      uint8_t * buf_ptr = static_cast<uint8_t *>(encoder_pkt->data.frame.buf);
-      vector<FECDatagram> fec_datagrams = 
-      fec_.encode(frame_id_, buf_ptr, frame_size);
-
-      for (FECDatagram & datagram : fec_datagrams) {
-        send_buf_.emplace_back(frame_id_, frame_type, datagram.fec_type,
-          datagram.frag_id, datagram.frag_cnt, datagram.repair_cnt,
-          datagram.padding, datagram.payload);
+      if (verbose_) {
+        cerr << "Encoded a key frame: frame_id=" << frame_id_ << endl;
       }
     }
+
+    // FEC encoding
+    vector<FECDatagram> fec_datagrams = 
+      fec_.encode(frame_id_, packet_->data, frame_size);
+
+    for (FECDatagram & datagram : fec_datagrams) {
+      send_buf_.emplace_back(frame_id_, frame_type, datagram.fec_type,
+        datagram.frag_id, datagram.frag_cnt, datagram.repair_cnt,
+        datagram.padding, datagram.payload);
+    }
+
+    av_packet_unref(packet_);
+    break; // Process one packet at a time
   }
 
   return frame_size;
@@ -318,7 +373,6 @@ void Encoder::set_target_bitrate(const unsigned int bitrate_kbps)
 {
   target_bitrate_ = bitrate_kbps;
 
-  cfg_.rc_target_bitrate = target_bitrate_;
-  check_call(vpx_codec_enc_config_set(&context_, &cfg_),
-             VPX_CODEC_OK, "set_target_bitrate");
+  // Update the codec context with new bitrate
+  codec_ctx_->bit_rate = target_bitrate_ * 1000; // convert kbps to bps
 }

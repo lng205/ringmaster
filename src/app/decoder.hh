@@ -2,8 +2,9 @@
 #define DECODER_HH
 
 extern "C" {
-#include <vpx/vpx_decoder.h>
-#include <vpx/vp8dx.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
 }
 
 #include <map>
@@ -133,8 +134,8 @@ private:
   void clean_up_to(const uint32_t frontier);
 
   // worker thread calls the functions below
-  double decode_frame(vpx_codec_ctx_t & context, const Frame & frame);
-  void display_decoded_frame(vpx_codec_ctx_t & context, VideoDisplay & display);
+  double decode_frame(AVCodecContext* codec_ctx, const Frame & frame);
+  void display_decoded_frame(AVCodecContext* codec_ctx, AVFrame* frame, VideoDisplay & display);
   void worker_main();
 
   // fec

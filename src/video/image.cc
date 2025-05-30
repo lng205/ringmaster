@@ -33,6 +33,52 @@ RawImage::RawImage(vpx_image_t * const vpx_img)
   display_height_ = vpx_img->d_h;
 }
 
+// constructor with a non-owning pointer to AVFrame
+RawImage::RawImage(AVFrame * const av_frame)
+  : vpx_img_(nullptr),
+    own_vpx_img_(true),
+    display_width_(),
+    display_height_()
+{
+  if (not av_frame) {
+    throw runtime_error("RawImage: unable to construct from a null AVFrame");
+  }
+
+  if (av_frame->format != AV_PIX_FMT_YUV420P) {
+    throw runtime_error("RawImage: only supports YUV420P format");
+  }
+
+  display_width_ = av_frame->width;
+  display_height_ = av_frame->height;
+
+  // Allocate and copy from AVFrame to vpx_image for compatibility
+  vpx_img_ = vpx_img_alloc(nullptr, VPX_IMG_FMT_I420, display_width_, display_height_, 1);
+  if (!vpx_img_) {
+    throw runtime_error("RawImage: failed to allocate vpx_image from AVFrame");
+  }
+
+  // Copy Y plane
+  for (int y = 0; y < display_height_; y++) {
+    memcpy(vpx_img_->planes[VPX_PLANE_Y] + y * vpx_img_->stride[VPX_PLANE_Y],
+           av_frame->data[0] + y * av_frame->linesize[0],
+           display_width_);
+  }
+
+  // Copy U plane
+  for (int y = 0; y < display_height_ / 2; y++) {
+    memcpy(vpx_img_->planes[VPX_PLANE_U] + y * vpx_img_->stride[VPX_PLANE_U],
+           av_frame->data[1] + y * av_frame->linesize[1],
+           display_width_ / 2);
+  }
+
+  // Copy V plane
+  for (int y = 0; y < display_height_ / 2; y++) {
+    memcpy(vpx_img_->planes[VPX_PLANE_V] + y * vpx_img_->stride[VPX_PLANE_V],
+           av_frame->data[2] + y * av_frame->linesize[2],
+           display_width_ / 2);
+  }
+}
+
 RawImage::~RawImage()
 {
   // free vpx_image only if the class owns it
@@ -93,4 +139,40 @@ void RawImage::copy_v_from(const string_view src)
   }
 
   memcpy(v_plane(), src.data(), src.size());
+}
+
+std::vector<uint8_t> RawImage::y() const
+{
+  std::vector<uint8_t> y_data(y_size());
+  uint8_t * src = y_plane();
+  for (int row = 0; row < display_height_; row++) {
+    memcpy(y_data.data() + row * display_width_,
+           src + row * y_stride(),
+           display_width_);
+  }
+  return y_data;
+}
+
+std::vector<uint8_t> RawImage::u() const
+{
+  std::vector<uint8_t> u_data(uv_size());
+  uint8_t * src = u_plane();
+  for (int row = 0; row < display_height_ / 2; row++) {
+    memcpy(u_data.data() + row * (display_width_ / 2),
+           src + row * u_stride(),
+           display_width_ / 2);
+  }
+  return u_data;
+}
+
+std::vector<uint8_t> RawImage::v() const
+{
+  std::vector<uint8_t> v_data(uv_size());
+  uint8_t * src = v_plane();
+  for (int row = 0; row < display_height_ / 2; row++) {
+    memcpy(v_data.data() + row * (display_width_ / 2),
+           src + row * v_stride(),
+           display_width_ / 2);
+  }
+  return v_data;
 }

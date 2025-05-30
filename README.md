@@ -10,7 +10,7 @@
 
 1. 安装依赖
 ```
-sudo apt install libvpx-dev libsdl2-dev libjerasure-dev
+sudo apt install libavcodec-dev libavformat-dev libavutil-dev libswscale-dev libsdl2-dev libjerasure-dev
 ```
 
 2. 编译
@@ -26,7 +26,7 @@ cmake --build build
 ```
 
 这模拟了一次1:1的视频通话，发送端压缩视频帧并发送，接收端解码视频帧并显示。
-输入的视频格式为y4m，分辨率为704x576，帧率为30fps。编码方式为VP9，码率为500kbps。
+输入的视频格式为y4m，分辨率为704x576，帧率为30fps。编码方式为H265，码率为500kbps。
 
 测试视频：[ice_4cif_30fps.y4m](https://media.xiph.org/video/derf/y4m/ice_4cif_30fps.y4m)
 （该域名同时也提供其他测试视频）

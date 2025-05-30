@@ -3,10 +3,12 @@
 
 extern "C" {
 #include <vpx/vpx_image.h>
+#include <libavutil/frame.h>
 }
 
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 // wrapper class for vpx_image of format I420
 class RawImage
@@ -17,6 +19,9 @@ public:
 
   // hold a non-owning pointer to an existing vpx_image
   RawImage(vpx_image_t * const vpx_img);
+
+  // hold a non-owning pointer to an existing AVFrame
+  RawImage(AVFrame * const av_frame);
 
   // free the vpx_image only if the class owns it
   ~RawImage();
@@ -41,6 +46,11 @@ public:
   int y_stride() const { return vpx_img_->stride[VPX_PLANE_Y]; }
   int u_stride() const { return vpx_img_->stride[VPX_PLANE_U]; }
   int v_stride() const { return vpx_img_->stride[VPX_PLANE_V]; }
+
+  // direct access to Y, U, V data as vectors for encoder compatibility
+  std::vector<uint8_t> y() const;
+  std::vector<uint8_t> u() const;
+  std::vector<uint8_t> v() const;
 
   // copy image data from a YUYV-formatted buffer
   void copy_from_yuyv(const std::string_view src);
