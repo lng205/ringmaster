@@ -5,7 +5,6 @@ Export the converted operations to a file for further use
 """
 
 import numpy as np
-import galois
 
 class CyclicMatrix:
     def __init__(self, L):
@@ -18,6 +17,16 @@ class CyclicMatrix:
         for i in range(L):
             C[i, (i+1) % L] = 1
         return C
+
+    def filp_bits(self, M: np.ndarray) -> np.ndarray:
+        """
+        Flip bits if the bits in the element is greater than half
+        """
+        for i in range(M.shape[0]):
+            for j in range(M.shape[1]):
+                if M[i, j].bit_count() > (self.L - 1) / 2:
+                    M[i, j] = M[i, j] ^ (2**(self.L) - 1)
+        return M
 
     def convert(self, m: int) -> np.ndarray:
         assert 0 <= m < 2**(self.L - 1)
