@@ -3,6 +3,6 @@ add_library(fec
     intra_frame.cc
 )
 
-# Hard-coded path to Jerasure library
+find_library(JERASURE_LIB Jerasure REQUIRED)
 target_include_directories(fec PUBLIC /usr/include/jerasure ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(fec PUBLIC /usr/lib/x86_64-linux-gnu/libJerasure.so)
+target_link_libraries(fec PUBLIC ${JERASURE_LIB})
