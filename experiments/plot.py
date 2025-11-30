@@ -46,7 +46,6 @@ def plot_exp_a():
     
     ax.set_xlabel('丢包数量', fontproperties=CFONT, fontsize=12)
     ax.set_ylabel('恢复成功率 (%)', fontproperties=CFONT, fontsize=12)
-    ax.set_title('实验A: FEC丢包恢复能力', fontproperties=CFONT, fontsize=14)
     ax.set_ylim(-5, 105)
     ax.legend(prop=CFONT, frameon=True, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--')
@@ -80,7 +79,7 @@ def plot_exp_f():
     
     ax.set_xlabel('丢包率 (%)', fontproperties=CFONT, fontsize=12)
     ax.set_ylabel('帧恢复率 (%)', fontproperties=CFONT, fontsize=12)
-    ax.set_title('(a) 恢复率对比', fontproperties=CFONT, fontsize=14)
+    ax.set_title('(a) 恢复率', fontproperties=CFONT, fontsize=12)
     ax.set_ylim(80, 102)
     ax.legend(prop=CFONT, frameon=True, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--')
@@ -94,7 +93,7 @@ def plot_exp_f():
     
     ax.set_xlabel('丢包率 (%)', fontproperties=CFONT, fontsize=12)
     ax.set_ylabel('带宽开销 (%)', fontproperties=CFONT, fontsize=12)
-    ax.set_title('(b) 带宽开销对比', fontproperties=CFONT, fontsize=14)
+    ax.set_title('(b) 带宽开销', fontproperties=CFONT, fontsize=12)
     ax.legend(prop=CFONT, frameon=True, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--')
     
@@ -124,7 +123,7 @@ def plot_exp_d():
     
     ax.set_xlabel('帧大小 (KB)', fontproperties=CFONT, fontsize=12)
     ax.set_ylabel('时间 (ms)', fontproperties=CFONT, fontsize=12)
-    ax.set_title('(a) 编解码时间', fontproperties=CFONT, fontsize=14)
+    ax.set_title('(a) 编解码时间', fontproperties=CFONT, fontsize=12)
     ax.legend(prop=CFONT, frameon=True, edgecolor='black', fontsize=9)
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.set_xscale('log')
@@ -141,7 +140,7 @@ def plot_exp_d():
     
     ax.set_xlabel('帧大小 (KB)', fontproperties=CFONT, fontsize=12)
     ax.set_ylabel('吞吐量 (MB/s)', fontproperties=CFONT, fontsize=12)
-    ax.set_title('(b) 编解码吞吐量', fontproperties=CFONT, fontsize=14)
+    ax.set_title('(b) 编解码吞吐量', fontproperties=CFONT, fontsize=12)
     ax.legend(prop=CFONT, frameon=True, edgecolor='black', fontsize=9)
     ax.grid(True, alpha=0.3, linestyle='--')
     ax.set_xscale('log')
@@ -164,7 +163,6 @@ def plot_exp_c():
     ax.axhline(y=100, color='gray', linestyle='--', linewidth=1)
     ax.set_xlabel('冗余率', fontproperties=CFONT, fontsize=12)
     ax.set_ylabel('带宽占比 (%)', fontproperties=CFONT, fontsize=12)
-    ax.set_title('实验C: FEC带宽开销', fontproperties=CFONT, fontsize=14)
     ax.set_ylim(0, 220)
     
     # 标注数值
@@ -197,7 +195,6 @@ def plot_exp_b():
     
     ax.set_xlabel('丢包率 (%)', fontproperties=CFONT, fontsize=12)
     ax.set_ylabel('帧恢复率 (%)', fontproperties=CFONT, fontsize=12)
-    ax.set_title('实验B: FEC效果对比', fontproperties=CFONT, fontsize=14)
     ax.set_ylim(0, 105)
     ax.legend(prop=CFONT, frameon=True, edgecolor='black')
     ax.grid(True, alpha=0.3, linestyle='--')
@@ -231,7 +228,6 @@ def plot_exp_e():
     
     ax.set_xlabel('分辨率', fontproperties=CFONT, fontsize=12)
     ax.set_ylabel('延迟 (ms)', fontproperties=CFONT, fontsize=12)
-    ax.set_title('实验E: 端到端延迟分解', fontproperties=CFONT, fontsize=14)
     ax.set_xticks(x)
     ax.set_xticklabels(scenarios)
     ax.legend(prop=CFONT, frameon=True, edgecolor='black')
