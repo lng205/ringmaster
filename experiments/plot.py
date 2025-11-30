@@ -51,8 +51,8 @@ def plot_exp_a():
     ax.grid(True, alpha=0.3, linestyle='--')
     
     plt.tight_layout()
-    plt.savefig('exp_a_recovery.png', bbox_inches='tight', facecolor='white')
-    print("保存: exp_a_recovery.png")
+    plt.savefig('exp_a_recovery.pdf', bbox_inches='tight', facecolor='white')
+    print("保存: exp_a_recovery.pdf")
 
 def plot_exp_f():
     """实验F: 自适应冗余率"""
@@ -98,8 +98,8 @@ def plot_exp_f():
     ax.grid(True, alpha=0.3, linestyle='--')
     
     plt.tight_layout()
-    plt.savefig('exp_f_adaptive.png', bbox_inches='tight', facecolor='white')
-    print("保存: exp_f_adaptive.png")
+    plt.savefig('exp_f_adaptive.pdf', bbox_inches='tight', facecolor='white')
+    print("保存: exp_f_adaptive.pdf")
 
 def plot_exp_d():
     """实验D: RS编解码性能"""
@@ -146,8 +146,8 @@ def plot_exp_d():
     ax.set_xscale('log')
     
     plt.tight_layout()
-    plt.savefig('exp_d_performance.png', bbox_inches='tight', facecolor='white')
-    print("保存: exp_d_performance.png")
+    plt.savefig('exp_d_performance.pdf', bbox_inches='tight', facecolor='white')
+    print("保存: exp_d_performance.pdf")
 
 def plot_exp_c():
     """实验C: 带宽开销"""
@@ -172,8 +172,8 @@ def plot_exp_c():
     
     ax.grid(True, alpha=0.3, linestyle='--', axis='y')
     plt.tight_layout()
-    plt.savefig('exp_c_overhead.png', bbox_inches='tight', facecolor='white')
-    print("保存: exp_c_overhead.png")
+    plt.savefig('exp_c_overhead.pdf', bbox_inches='tight', facecolor='white')
+    print("保存: exp_c_overhead.pdf")
 
 def plot_exp_b():
     """实验B: FEC效果对比"""
@@ -200,8 +200,8 @@ def plot_exp_b():
     ax.grid(True, alpha=0.3, linestyle='--')
     
     plt.tight_layout()
-    plt.savefig('exp_b_comparison.png', bbox_inches='tight', facecolor='white')
-    print("保存: exp_b_comparison.png")
+    plt.savefig('exp_b_comparison.pdf', bbox_inches='tight', facecolor='white')
+    print("保存: exp_b_comparison.pdf")
 
 def plot_exp_e():
     """实验E: 端到端延迟分解"""
@@ -239,8 +239,8 @@ def plot_exp_e():
         ax.text(i, total + 1, f"FEC: {row['fec_ratio']:.1f}%", ha='center', fontsize=9)
     
     plt.tight_layout()
-    plt.savefig('exp_e_latency.png', bbox_inches='tight', facecolor='white')
-    print("保存: exp_e_latency.png")
+    plt.savefig('exp_e_latency.pdf', bbox_inches='tight', facecolor='white')
+    print("保存: exp_e_latency.pdf")
 
 if __name__ == "__main__":
     plot_exp_a()
