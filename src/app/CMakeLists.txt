@@ -16,3 +16,11 @@ target_link_libraries(exp_f fec)
 
 add_executable(exp_d ../../experiments/exp_d_performance.cc)
 target_link_libraries(exp_d fec)
+
+add_executable(exp_c ../../experiments/exp_c_overhead.cc)
+
+add_executable(exp_b ../../experiments/exp_b_comparison.cc)
+target_link_libraries(exp_b fec)
+
+add_executable(exp_e ../../experiments/exp_e_latency.cc)
+target_link_libraries(exp_e fec)
