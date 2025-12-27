@@ -62,6 +62,24 @@ Ringmaster 采用基于 **RLNC (Random Linear Network Coding，随机线性网�
     2.  **高斯消元**: 使用高斯-约旦消元法 (Gauss-Jordan Elimination) 在 $GF(2^8)$ 上将系数矩阵化为单位矩阵。
     3.  **恢复**: 伴随行变换，数据部分被还原为原始分片。
 
+### 2.6 动态冗余调整 (Dynamic Redundancy Adjustment)
+发送端根据接收端反馈的 ACK 统计丢包率，并动态调整 FEC 的冗余度，以在网络波动时保持恢复能力。
+
+*   **指标计算 (EWMA 平滑)**:
+    *   统计窗口: 每 1 秒。
+    *   **瞬时丢包率 ($L_{sample}$)**: $L_{sample} = 1.0 - \frac{\text{AckedPackets}}{\text{SentPackets}}$。
+    *   **平滑丢包率 ($L_{smoothed}$)**: 采用指数加权移动平均 (EWMA) 过滤瞬时抖动。
+        $$ L_{smoothed} = \alpha \times L_{sample} + (1 - \alpha) \times L_{old} $$
+        其中平滑因子 $\alpha = 0.2$。
+    *   **冗余度调整公式**:
+        *   基于平滑后的丢包率 $L_{smoothed}$ 计算。
+        *   理论要求: $(1 - L) \times (1 + R) \ge 1 \Rightarrow R \ge \frac{L}{1 - L}$。
+        *   **实际公式**: 乘以安全因子 ($Factor = 1.1$)，即增加 10% 的相对余量。
+            $$ R_{new} = \frac{L_{smoothed} \times Factor}{1 - (L_{smoothed} \times Factor)} $$
+    *   **边界限制**:
+        *   最小冗余 $R_{min} = 0.0$ (当 $L=0$ 时不浪费带宽)。
+        *   最大冗余 $R_{max} = 0.5$ (50%，防止过度抢占带宽)。
+    *   **实施**: 计算出的新冗余度 ($R_{new}$) 立即应用于下一帧的 FEC 编码参数。
 ## 3. 关键特性
 *   **帧内编码 (Intra-frame Only)**: 仅对同一视频帧内的包进行编码，避免跨帧编码带来的额外延迟。
 *   **混合纠错 (Hybrid FEC/ARQ)**: FEC 负责恢复随机丢包，接收端对恢复出的包发送 ACK；若 FEC 失败，回退到 ARQ 重传机制。

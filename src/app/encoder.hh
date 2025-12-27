@@ -15,6 +15,7 @@ extern "C" {
 #include "image.hh"
 #include "protocol.hh"
 #include "file_descriptor.hh"
+#include "redundancy_controller.hh"
 
 class Encoder
 {
@@ -42,6 +43,9 @@ public:
 
   // set target bitrate
   void set_target_bitrate(const unsigned int bitrate_kbps);
+
+  // set redundancy
+  void set_redundancy(const float redundancy);
 
   // accessors
   uint32_t frame_id() const { return frame_id_; }
@@ -87,10 +91,15 @@ private:
   std::optional<double> ewma_rtt_us_ {};
   static constexpr double ALPHA = 0.2;
 
+  // redundancy controller
+  RedundancyController redundancy_controller_ {};
+
   // performance stats
   unsigned int num_encoded_frames_ {0};
   double total_encode_time_ms_ {0.0};
   double max_encode_time_ms_ {0.0};
+  unsigned int packets_sent_stat_ {0};
+  unsigned int acks_received_stat_ {0};
 
   // constants
   static constexpr unsigned int MAX_NUM_RTX = 3;

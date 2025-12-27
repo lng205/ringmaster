@@ -234,6 +234,7 @@ void Encoder::add_unacked(Datagram && datagram)
   }
 
   it->second.last_send_ts = it->second.send_ts;
+  packets_sent_stat_++;
 }
 
 void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
@@ -244,6 +245,8 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
   if (ack->send_ts > 0) {
     add_rtt_sample(curr_ts - ack->send_ts);
   }
+
+  acks_received_stat_++;
 
   // find the acked datagram in 'unacked_'
   const auto acked_seq_num = make_pair(ack->frame_id, ack->frag_id);
@@ -309,10 +312,24 @@ void Encoder::output_periodic_stats()
          << "/" << double_to_string(*ewma_rtt_us_ / 1000.0) << endl;
   }
 
+  if (packets_sent_stat_ > 0) {
+    float new_redundancy = redundancy_controller_.update(packets_sent_stat_, acks_received_stat_);
+    set_redundancy(new_redundancy);
+
+    double sample_loss = 1.0 - static_cast<double>(acks_received_stat_) / packets_sent_stat_;
+    
+    cerr << "  - Loss rate (sample/EWMA): " << double_to_string(max(0.0, sample_loss))
+         << "/" << double_to_string(redundancy_controller_.loss_rate())
+         << " (Sent: " << packets_sent_stat_ << ", Acked: " << acks_received_stat_ << ")"
+         << " -> New Redundancy: " << double_to_string(new_redundancy) << endl;
+  }
+
   // reset all but RTT-related stats
   num_encoded_frames_ = 0;
   total_encode_time_ms_ = 0.0;
   max_encode_time_ms_ = 0.0;
+  packets_sent_stat_ = 0;
+  acks_received_stat_ = 0;
 }
 
 void Encoder::set_target_bitrate(const unsigned int bitrate_kbps)
@@ -323,3 +340,9 @@ void Encoder::set_target_bitrate(const unsigned int bitrate_kbps)
   check_call(vpx_codec_enc_config_set(&context_, &cfg_),
              VPX_CODEC_OK, "set_target_bitrate");
 }
+
+void Encoder::set_redundancy(const float redundancy)
+{
+  fec_.set_redundancy(redundancy);
+}
+
