@@ -26,7 +26,6 @@ public:
   Frame(const uint32_t frame_id,
         const FrameType frame_type,
         const uint16_t frag_cnt,
-        const uint16_t repair_cnt,
         const size_t padding_size);
 
   // insert a fragment into the frame
@@ -112,6 +111,7 @@ private:
 
   // performance stats
   unsigned int num_decodable_frames_ {0};
+  unsigned int total_recovered_pkts_ {0};
   size_t total_decodable_frame_size_ {0}; // bytes
   std::chrono::time_point<std::chrono::steady_clock> last_stats_time_ {};
 

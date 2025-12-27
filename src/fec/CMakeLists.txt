@@ -1,8 +1,7 @@
 add_library(fec
-    jerasure.cc
+    galois.cc
+    rlnc.cc
     intra_frame.cc
 )
 
-find_library(JERASURE_LIB Jerasure REQUIRED)
-target_include_directories(fec PUBLIC /usr/include/jerasure ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(fec PUBLIC ${JERASURE_LIB})
+target_include_directories(fec PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

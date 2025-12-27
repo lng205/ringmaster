@@ -17,9 +17,10 @@ using namespace chrono;
 Encoder::Encoder(const uint16_t display_width,
                  const uint16_t display_height,
                  const uint16_t frame_rate,
-                 const string & output_path)
+                 const string & output_path,
+                 const float redundancy)
   : display_width_(display_width), display_height_(display_height),
-    frame_rate_(frame_rate), output_fd_(), fec_(Datagram::max_payload, 1)
+    frame_rate_(frame_rate), output_fd_(), fec_(Datagram::max_payload, redundancy)
 {
   // open the output file
   if (not output_path.empty()) {
@@ -212,7 +213,7 @@ size_t Encoder::packetize_encoded_frame()
 
       for (FECDatagram & datagram : fec_datagrams) {
         send_buf_.emplace_back(frame_id_, frame_type, datagram.fec_type,
-          datagram.frag_id, datagram.frag_cnt, datagram.repair_cnt,
+          datagram.frag_id, datagram.frag_cnt,
           datagram.padding, datagram.payload);
       }
     }

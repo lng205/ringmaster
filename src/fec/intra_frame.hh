@@ -1,6 +1,15 @@
-#include <optional>
+#pragma once
 
-#include "jerasure.hh"
+#include <vector>
+#include <string>
+#include <optional>
+#include <string_view>
+#include <iostream>
+#include <cstdint>
+
+#include "rlnc.hh"
+
+using namespace std;
 
 enum class FECType : uint8_t {
   DATA = 0,
@@ -14,9 +23,13 @@ struct FECDatagram {
     FECType fec_type;
     uint16_t frag_id;
     uint16_t frag_cnt;
-    uint16_t repair_cnt;
     uint16_t padding;
     string_view payload;
+};
+
+struct CodingInfo {
+    uint16_t k, m, w;
+    size_t size;
 };
 
 class IntraFrameFEC {
@@ -32,7 +45,7 @@ public:
     void set_max_payload(int max_payload) { _max_payload = max_payload; }
     void set_redundancy(float redundancy) { _redundancy = redundancy; }
 private:
-    Jerasure _calc_fec_params(size_t size);
+    void _calc_fec_params(size_t size);
     vector<char*> _get_buf(vector<string>& buf, size_t k, size_t size);
     vector<string> _data_buf;
     vector<string> _coding_buf;

@@ -23,7 +23,8 @@ public:
   Encoder(const uint16_t display_width,
           const uint16_t display_height,
           const uint16_t frame_rate,
-          const std::string & output_path = "");
+          const std::string & output_path = "",
+          const float redundancy = 1.0);
   ~Encoder();
 
   // encode raw_img and packetize into datagrams
