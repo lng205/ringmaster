@@ -2,8 +2,8 @@
 # Using the downloaded real video file
 VIDEO_FILE="ice_4cif.y4m"
 
-# Sender: 5% loss, verbose
-./build/sender 12345 $VIDEO_FILE --loss 5 -v > sender.log 2>&1 &
+# Sender: verbose
+./build/sender 12345 $VIDEO_FILE -v > sender.log 2>&1 &
 pid1=$!
 
 # Receiver: 127.0.0.1, Port 12345, 704x576, 60 FPS, 1000 kbps CBR

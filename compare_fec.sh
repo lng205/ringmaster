@@ -1,11 +1,10 @@
 #!/bin/bash
 VIDEO_FILE="ice_4cif.y4m"
-LOSS=5
 DURATION=10
 
 echo "=== Experiment 1: Baseline (No FEC) ==="
-echo "Loss: $LOSS%, Redundancy: 0.0"
-./build/sender 12345 $VIDEO_FILE --loss $LOSS --redundancy 0.0 -v > sender_baseline.log 2>&1 &
+echo "Redundancy: 0.0"
+./build/sender 12345 $VIDEO_FILE --redundancy 0.0 -v > sender_baseline.log 2>&1 &
 pid1=$!
 ./build/receiver 127.0.0.1 12345 704 576 --fps 60 --cbr 1000 -v > receiver_baseline.log 2>&1 &
 pid2=$!
@@ -18,8 +17,8 @@ echo "Baseline done."
 echo ""
 
 echo "=== Experiment 2: FEC Enabled (20% Redundancy) ==="
-echo "Loss: $LOSS%, Redundancy: 0.2"
-./build/sender 12346 $VIDEO_FILE --loss $LOSS --redundancy 0.2 -v > sender_fec.log 2>&1 &
+echo "Redundancy: 0.2"
+./build/sender 12346 $VIDEO_FILE --redundancy 0.2 -v > sender_fec.log 2>&1 &
 pid3=$!
 ./build/receiver 127.0.0.1 12346 704 576 --fps 60 --cbr 1000 -v > receiver_fec.log 2>&1 &
 pid4=$!

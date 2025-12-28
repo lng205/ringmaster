@@ -57,20 +57,18 @@ int main(int argc, char * argv[])
   // argument parsing
   string output_path;
   bool verbose = false;
-  int loss_rate = 0;
   float redundancy = 1.0;
 
   const option cmd_line_opts[] = {
     {"mtu",     required_argument, nullptr, 'M'},
     {"output",  required_argument, nullptr, 'o'},
     {"verbose", no_argument,       nullptr, 'v'},
-    {"loss",    required_argument, nullptr, 'l'},
     {"redundancy", required_argument, nullptr, 'R'},
     { nullptr,  0,                 nullptr,  0 },
   };
 
   while (true) {
-    const int opt = getopt_long(argc, argv, "o:vl:R:", cmd_line_opts, nullptr);
+    const int opt = getopt_long(argc, argv, "o:vR:", cmd_line_opts, nullptr);
     if (opt == -1) {
       break;
     }
@@ -84,10 +82,6 @@ int main(int argc, char * argv[])
         break;
       case 'v':
         verbose = true;
-        break;
-      case 'l':
-        loss_rate = strict_stoi(optarg);
-        srand(time(nullptr));
         break;
       case 'R':
         redundancy = stof(optarg);
@@ -188,19 +182,14 @@ int main(int argc, char * argv[])
         // timestamp the sending time before sending
         datagram.send_ts = timestamp_us();
 
-        bool dropped = false;
-        if (loss_rate > 0 && (rand() % 100 < loss_rate)) {
-            dropped = true;
-        }
-
-        if (dropped || udp_sock.send(datagram.serialize_to_string())) {
+        if (udp_sock.send(datagram.serialize_to_string())) {
           if (verbose) {
             cerr << "Sent datagram: frame_id=" << datagram.frame_id
                  << " fec_type=" << datagram.fec_type
                  << " frag_id=" << datagram.frag_id
                  << " frag_cnt=" << datagram.frag_cnt
                  << " rtx=" << datagram.num_rtx 
-                 << (dropped ? " (dropped)" : "") << endl;
+                 << endl;
           }
 
           // move the sent datagram to unacked if not a retransmission
