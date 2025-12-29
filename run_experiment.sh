@@ -3,7 +3,7 @@
 # 用法: ./run_experiment.sh [视频文件]
 # 后台运行: nohup ./run_experiment.sh video.y4m > experiment.log 2>&1 &
 
-set -e
+# 不使用 set -e，手动处理错误
 
 VIDEO=${1:-"ice_4cif_30fps.y4m"}
 WIDTH=704
@@ -11,7 +11,7 @@ HEIGHT=576
 FPS=30
 CBR=500
 PORT=12345
-DURATION=60  # 每组实验时长(秒)
+DURATION=10  # 每组实验时长(秒)
 REPEAT=3     # 重复次数
 
 OUTDIR="results"
@@ -54,18 +54,19 @@ run_one() {
         sudo tc qdisc add dev lo root netem loss ${loss}% delay ${delay}ms
     fi
     
+    # 启动 sender (先启动，等待 receiver 连接)
+    timeout $((DURATION + 10)) ./build/sender $PORT "$VIDEO" -R $redundancy $extra \
+        2> "$OUTDIR/tx_$tag.log" &
+    local tx_pid=$!
+    sleep 2
+    
     # 启动 receiver
-    timeout $((DURATION + 10)) ./build/receiver 127.0.0.1 $PORT $WIDTH $HEIGHT \
-        --fps $FPS --cbr $CBR --lazy 2 -o "$OUTDIR/rx_$tag.csv" 2>/dev/null &
-    local rx_pid=$!
-    sleep 1
+    timeout $DURATION ./build/receiver 127.0.0.1 $PORT $WIDTH $HEIGHT \
+        --fps $FPS --cbr $CBR --lazy 2 -o "$OUTDIR/rx_$tag.csv" 2>/dev/null || true
     
-    # 启动 sender
-    timeout $DURATION ./build/sender $PORT "$VIDEO" -R $redundancy $extra \
-        2> "$OUTDIR/tx_$tag.log" || true
-    
-    # 等待 receiver 结束
-    wait $rx_pid 2>/dev/null || true
+    # 杀掉 sender 并等待
+    kill $tx_pid 2>/dev/null || true
+    wait $tx_pid 2>/dev/null || true
     
     # 清理网络
     sudo tc qdisc del dev lo root 2>/dev/null || true
