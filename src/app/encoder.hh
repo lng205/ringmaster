@@ -35,8 +35,11 @@ public:
   void add_unacked(const Datagram & datagram);
   void add_unacked(Datagram && datagram);
 
-  // handle ACK
+  // handle ACK (for RTT estimation and ARQ)
   void handle_ack(const std::shared_ptr<AckMsg> & ack);
+
+  // handle HOP_ACK (for redundancy adjustment)
+  void handle_hop_ack(const std::shared_ptr<HopAckMsg> & hop_ack);
 
   // output stats every second and reset some of them
   void output_periodic_stats();
@@ -111,7 +114,8 @@ private:
   double total_encode_time_ms_ {0.0};
   double max_encode_time_ms_ {0.0};
   unsigned int packets_sent_stat_ {0};
-  unsigned int acks_received_stat_ {0};
+  unsigned int acks_received_stat_ {0};      // end-to-end ACKs (for RTT/ARQ)
+  unsigned int hop_acks_received_stat_ {0};  // hop ACKs (for redundancy)
 
   // cumulative stats for experiment
   uint64_t total_tx_bytes_ {0};

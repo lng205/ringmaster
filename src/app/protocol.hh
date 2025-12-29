@@ -58,9 +58,10 @@ struct Datagram
 struct Msg
 {
   enum class Type : uint8_t {
-    INVALID = 0, // invalid message type
-    ACK = 1,     // AckMsg
-    CONFIG = 2   // ConfigMsg
+    INVALID = 0,  // invalid message type
+    ACK = 1,      // AckMsg
+    CONFIG = 2,   // ConfigMsg
+    HOP_ACK = 3   // HopAckMsg (hop-by-hop acknowledgment)
   };
 
   Type type {Type::INVALID}; // message type
@@ -105,6 +106,20 @@ struct ConfigMsg : Msg
   uint16_t height {};         // display height
   uint16_t frame_rate {};     // FPS
   uint32_t target_bitrate {}; // target bitrate
+
+  size_t serialized_size() const override;
+  std::string serialize_to_string() const override;
+};
+
+// Hop-by-hop ACK for measuring per-link loss rate
+struct HopAckMsg : Msg
+{
+  HopAckMsg() : Msg(Type::HOP_ACK) {}
+  HopAckMsg(const Datagram & datagram);
+  HopAckMsg(uint32_t frame_id, uint16_t frag_id);
+
+  uint32_t frame_id {};  // frame ID
+  uint16_t frag_id {};   // fragment ID
 
   size_t serialized_size() const override;
   std::string serialize_to_string() const override;

@@ -238,24 +238,36 @@ int main(int argc, char * argv[])
         }
         const shared_ptr<Msg> msg = Msg::parse_from_string(*raw_data);
 
-        // ignore invalid or non-ACK messages
-        if (msg == nullptr or msg->type != Msg::Type::ACK) {
-          return;
+        if (msg == nullptr) {
+          continue;
         }
 
-        const auto ack = dynamic_pointer_cast<AckMsg>(msg);
+        if (msg->type == Msg::Type::HOP_ACK) {
+          // HOP_ACK for first-hop loss measurement (redundancy adjustment)
+          const auto hop_ack = dynamic_pointer_cast<HopAckMsg>(msg);
 
-        if (verbose) {
-          cerr << "Received ACK: frame_id=" << ack->frame_id
-               << " frag_id=" << ack->frag_id << endl;
-        }
+          if (verbose) {
+            cerr << "Received HOP_ACK: frame_id=" << hop_ack->frame_id
+                 << " frag_id=" << hop_ack->frag_id << endl;
+          }
 
-        // RTT estimation, retransmission, etc.
-        encoder.handle_ack(ack);
+          encoder.handle_hop_ack(hop_ack);
+        } else if (msg->type == Msg::Type::ACK) {
+          // End-to-end ACK for RTT estimation and ARQ
+          const auto ack = dynamic_pointer_cast<AckMsg>(msg);
 
-        // send_buf might contain datagrams to be retransmitted now
-        if (not encoder.send_buf().empty()) {
-          poller.activate(udp_sock, Poller::Out);
+          if (verbose) {
+            cerr << "Received ACK: frame_id=" << ack->frame_id
+                 << " frag_id=" << ack->frag_id << endl;
+          }
+
+          // RTT estimation, retransmission, etc.
+          encoder.handle_ack(ack);
+
+          // send_buf might contain datagrams to be retransmitted now
+          if (not encoder.send_buf().empty()) {
+            poller.activate(udp_sock, Poller::Out);
+          }
         }
       }
     }

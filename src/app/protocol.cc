@@ -98,6 +98,12 @@ shared_ptr<Msg> Msg::parse_from_string(const string & binary)
     ret->target_bitrate = parser.read_uint32();
     return ret;
   }
+  else if (type == Type::HOP_ACK) {
+    auto ret = make_shared<HopAckMsg>();
+    ret->frame_id = parser.read_uint32();
+    ret->frag_id = parser.read_uint16();
+    return ret;
+  }
   else {
     return nullptr;
   }
@@ -152,6 +158,31 @@ string ConfigMsg::serialize_to_string() const
   binary += put_number(height);
   binary += put_number(frame_rate);
   binary += put_number(target_bitrate);
+
+  return binary;
+}
+
+HopAckMsg::HopAckMsg(const Datagram & datagram)
+  : Msg(Type::HOP_ACK), frame_id(datagram.frame_id), frag_id(datagram.frag_id)
+{}
+
+HopAckMsg::HopAckMsg(const uint32_t _frame_id, const uint16_t _frag_id)
+  : Msg(Type::HOP_ACK), frame_id(_frame_id), frag_id(_frag_id)
+{}
+
+size_t HopAckMsg::serialized_size() const
+{
+  return Msg::serialized_size() + sizeof(uint32_t) + sizeof(uint16_t);
+}
+
+string HopAckMsg::serialize_to_string() const
+{
+  string binary;
+  binary.reserve(serialized_size());
+
+  binary += Msg::serialize_to_string();
+  binary += put_number(frame_id);
+  binary += put_number(frag_id);
 
   return binary;
 }

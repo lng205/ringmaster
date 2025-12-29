@@ -296,6 +296,12 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
   unacked_.erase(acked_it);
 }
 
+void Encoder::handle_hop_ack(const shared_ptr<HopAckMsg> & hop_ack)
+{
+  // HOP_ACK is used for measuring first-hop loss rate (for redundancy adjustment)
+  hop_acks_received_stat_++;
+}
+
 void Encoder::add_rtt_sample(const unsigned int rtt_us)
 {
   // min RTT
@@ -327,19 +333,25 @@ void Encoder::output_periodic_stats()
   }
 
   if (packets_sent_stat_ > 0) {
-    double sample_loss = 1.0 - static_cast<double>(acks_received_stat_) / packets_sent_stat_;
+    // Use HOP_ACK for first-hop loss rate (for redundancy adjustment)
+    double hop_loss = 1.0 - static_cast<double>(hop_acks_received_stat_) / packets_sent_stat_;
+    // End-to-end loss for reference
+    double e2e_loss = 1.0 - static_cast<double>(acks_received_stat_) / packets_sent_stat_;
 
     if (not fixed_redundancy_) {
-      float new_redundancy = redundancy_controller_.update(packets_sent_stat_, acks_received_stat_);
+      // Adjust redundancy based on first-hop loss (HOP_ACK)
+      float new_redundancy = redundancy_controller_.update(packets_sent_stat_, hop_acks_received_stat_);
       set_redundancy(new_redundancy);
 
-      cerr << "  - Loss rate (sample/EWMA): " << double_to_string(max(0.0, sample_loss))
+      cerr << "  - First-hop loss (sample/EWMA): " << double_to_string(max(0.0, hop_loss))
            << "/" << double_to_string(redundancy_controller_.loss_rate())
-           << " (Sent: " << packets_sent_stat_ << ", Acked: " << acks_received_stat_ << ")"
+           << " (Sent: " << packets_sent_stat_ << ", HopAcked: " << hop_acks_received_stat_ << ")"
            << " -> New Redundancy: " << double_to_string(new_redundancy) << endl;
+      cerr << "  - End-to-end loss: " << double_to_string(max(0.0, e2e_loss))
+           << " (E2E Acked: " << acks_received_stat_ << ")" << endl;
     } else {
-      cerr << "  - Loss rate: " << double_to_string(max(0.0, sample_loss))
-           << " (Sent: " << packets_sent_stat_ << ", Acked: " << acks_received_stat_ << ")"
+      cerr << "  - First-hop loss: " << double_to_string(max(0.0, hop_loss))
+           << " (Sent: " << packets_sent_stat_ << ", HopAcked: " << hop_acks_received_stat_ << ")"
            << " [fixed redundancy]" << endl;
     }
   }
@@ -356,6 +368,7 @@ void Encoder::output_periodic_stats()
   max_encode_time_ms_ = 0.0;
   packets_sent_stat_ = 0;
   acks_received_stat_ = 0;
+  hop_acks_received_stat_ = 0;
 }
 
 void Encoder::set_target_bitrate(const unsigned int bitrate_kbps)

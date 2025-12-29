@@ -2,3 +2,4 @@ build/
 *.y4m
 .vscode/
 *.log
+*.csv

@@ -110,7 +110,11 @@ int main(int argc, char * argv[])
       throw runtime_error("failed to parse a datagram");
     }
 
-    // send an ACK back to sender
+    // Send HOP_ACK for all packets (for hop-by-hop loss measurement)
+    HopAckMsg hop_ack(datagram);
+    udp_sock.send(hop_ack.serialize_to_string());
+
+    // send an end-to-end ACK back to sender (for DATA packets only)
     if (datagram.fec_type == FECType::DATA) {
       AckMsg ack(datagram);
       udp_sock.send(ack.serialize_to_string());
