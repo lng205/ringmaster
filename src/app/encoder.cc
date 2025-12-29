@@ -253,8 +253,6 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
     add_rtt_sample(curr_ts - ack->send_ts);
   }
 
-  acks_received_stat_++;
-
   // find the acked datagram in 'unacked_'
   const auto acked_seq_num = make_pair(ack->frame_id, ack->frag_id);
   auto acked_it = unacked_.find(acked_seq_num);
@@ -262,6 +260,12 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
   if (acked_it == unacked_.end()) {
     // do nothing else if ACK is not for an unacked datagram
     return;
+  }
+
+  // only count ACKs for packets received without retransmission
+  // to measure raw network loss rate
+  if (ack->send_ts > 0 && acked_it->second.num_rtx == 0) {
+    acks_received_stat_++;
   }
 
   // retransmit all unacked datagrams before the acked one (backward)

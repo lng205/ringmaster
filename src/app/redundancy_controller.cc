@@ -14,11 +14,15 @@ float RedundancyController::update(const uint32_t packets_sent,
     return 0.0f; 
   }
 
-  // 1. Calculate Instantaneous Loss
-  double sample_loss = 1.0 - static_cast<double>(acks_received) / packets_sent;
-  sample_loss = max(0.0, min(1.0, sample_loss));
+  // 1. Calculate Instantaneous Loss (observed)
+  double obs_loss = 1.0 - static_cast<double>(acks_received) / packets_sent;
+  obs_loss = max(0.0, min(1.0, obs_loss));
 
-  // 2. Update EWMA
+  // 2. Correct for ACK loss: obs_loss = 2P - P² → P = 1 - sqrt(1 - obs_loss)
+  // This assumes symmetric loss on data and ACK paths
+  double sample_loss = (obs_loss < 1.0) ? 1.0 - sqrt(1.0 - obs_loss) : 1.0;
+
+  // 3. Update EWMA
   if (not ewma_loss_rate_) {
     ewma_loss_rate_ = sample_loss;
   } else {
@@ -27,7 +31,7 @@ float RedundancyController::update(const uint32_t packets_sent,
 
   double loss = *ewma_loss_rate_;
 
-  // 3. Calculate Redundancy
+  // 4. Calculate Redundancy
   // R = (L * Factor) / (1 - (L * Factor))
   double target_loss = loss * SAFETY_FACTOR;
   
@@ -38,7 +42,7 @@ float RedundancyController::update(const uint32_t packets_sent,
 
   double redundancy = target_loss / (1.0 - target_loss);
 
-  // 4. Clamp
+  // 5. Clamp
   if (redundancy < 0.0) redundancy = 0.0;
   if (redundancy > MAX_REDUNDANCY) redundancy = MAX_REDUNDANCY;
 

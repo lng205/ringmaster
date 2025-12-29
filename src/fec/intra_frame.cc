@@ -57,7 +57,14 @@ void IntraFrameFEC::_calc_fec_params(size_t size) {
         }
     }
 
-    info.m = ceil(info.k * _redundancy);
+    // Use probabilistic rounding to allow fractional redundancy
+    double exact_m = info.k * _redundancy;
+    info.m = static_cast<int>(exact_m);
+    // Probabilistically add one more based on fractional part
+    double frac = exact_m - info.m;
+    if (frac > 0 && (rand() / (double)RAND_MAX) < frac) {
+        info.m++;
+    }
     info.w = 8;
 }
 
