@@ -30,7 +30,10 @@ void print_usage(const string & program_name)
   "Options:\n"
   "--mtu <MTU>                MTU for deciding UDP payload size\n"
   "-o, --output <file>        file to output performance results to\n"
-  "-v, --verbose              enable more logging for debugging"
+  "-v, --verbose              enable more logging for debugging\n"
+  "-R, --redundancy <R>       FEC redundancy ratio (default: 1.0)\n"
+  "--fixed-redundancy         disable dynamic redundancy adjustment\n"
+  "--no-arq                   disable ARQ retransmission"
   << endl;
 }
 
@@ -58,12 +61,16 @@ int main(int argc, char * argv[])
   string output_path;
   bool verbose = false;
   float redundancy = 1.0;
+  bool fixed_redundancy = false;
+  bool enable_arq = true;
 
   const option cmd_line_opts[] = {
     {"mtu",     required_argument, nullptr, 'M'},
     {"output",  required_argument, nullptr, 'o'},
     {"verbose", no_argument,       nullptr, 'v'},
     {"redundancy", required_argument, nullptr, 'R'},
+    {"fixed-redundancy", no_argument, nullptr, 'F'},
+    {"no-arq", no_argument, nullptr, 'A'},
     { nullptr,  0,                 nullptr,  0 },
   };
 
@@ -85,6 +92,12 @@ int main(int argc, char * argv[])
         break;
       case 'R':
         redundancy = stof(optarg);
+        break;
+      case 'F':
+        fixed_redundancy = true;
+        break;
+      case 'A':
+        enable_arq = false;
         break;
       default:
         print_usage(argv[0]);
@@ -135,6 +148,8 @@ int main(int argc, char * argv[])
   Encoder encoder(width, height, frame_rate, output_path, redundancy);
   encoder.set_target_bitrate(target_bitrate);
   encoder.set_verbose(verbose);
+  encoder.set_fixed_redundancy(fixed_redundancy);
+  encoder.set_enable_arq(enable_arq);
 
   Poller poller;
 

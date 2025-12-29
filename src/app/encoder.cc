@@ -224,7 +224,14 @@ size_t Encoder::packetize_encoded_frame()
 
 void Encoder::add_unacked(Datagram && datagram)
 {
-  if (datagram.fec_type == FECType::REPAIR) return;
+  // track stats for all packets
+  total_tx_packets_++;
+  total_tx_bytes_ += Datagram::HEADER_SIZE + datagram.payload.size();
+
+  if (datagram.fec_type == FECType::REPAIR) {
+    total_repair_packets_++;
+    return;
+  }
 
   const auto seq_num = make_pair(datagram.frame_id, datagram.frag_id);
   auto [it, success] = unacked_.emplace(seq_num, move(datagram));
@@ -257,26 +264,29 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
     return;
   }
 
-  // // retransmit all unacked datagrams before the acked one (backward)
-  // for (auto rit = make_reverse_iterator(acked_it);
-  //      rit != unacked_.rend(); rit++) {
-  //   auto & datagram = rit->second;
+  // retransmit all unacked datagrams before the acked one (backward)
+  if (enable_arq_ and ewma_rtt_us_) {
+    for (auto rit = make_reverse_iterator(acked_it);
+         rit != unacked_.rend(); rit++) {
+      auto & datagram = rit->second;
 
-  //   // skip if a datagram has been retransmitted MAX_NUM_RTX times
-  //   if (datagram.num_rtx >= MAX_NUM_RTX) {
-  //     continue;
-  //   }
+      // skip if a datagram has been retransmitted MAX_NUM_RTX times
+      if (datagram.num_rtx >= MAX_NUM_RTX) {
+        continue;
+      }
 
-  //   // retransmit if it's the first RTX or the last RTX was about one RTT ago
-  //   if (datagram.num_rtx == 0 or
-  //       curr_ts - datagram.last_send_ts > ewma_rtt_us_.value()) {
-  //     datagram.num_rtx++;
-  //     datagram.last_send_ts = curr_ts;
+      // retransmit if it's the first RTX or the last RTX was about one RTT ago
+      if (datagram.num_rtx == 0 or
+          curr_ts - datagram.last_send_ts > ewma_rtt_us_.value()) {
+        datagram.num_rtx++;
+        datagram.last_send_ts = curr_ts;
 
-  //     // retransmissions are more urgent
-  //     send_buf_.emplace_front(datagram);
-  //   }
-  // }
+        // retransmissions are more urgent
+        send_buf_.emplace_front(datagram);
+        total_retrans_packets_++;
+      }
+    }
+  }
 
   // finally, erase the acked datagram from 'unacked_'
   unacked_.erase(acked_it);
@@ -313,16 +323,28 @@ void Encoder::output_periodic_stats()
   }
 
   if (packets_sent_stat_ > 0) {
-    float new_redundancy = redundancy_controller_.update(packets_sent_stat_, acks_received_stat_);
-    set_redundancy(new_redundancy);
-
     double sample_loss = 1.0 - static_cast<double>(acks_received_stat_) / packets_sent_stat_;
-    
-    cerr << "  - Loss rate (sample/EWMA): " << double_to_string(max(0.0, sample_loss))
-         << "/" << double_to_string(redundancy_controller_.loss_rate())
-         << " (Sent: " << packets_sent_stat_ << ", Acked: " << acks_received_stat_ << ")"
-         << " -> New Redundancy: " << double_to_string(new_redundancy) << endl;
+
+    if (not fixed_redundancy_) {
+      float new_redundancy = redundancy_controller_.update(packets_sent_stat_, acks_received_stat_);
+      set_redundancy(new_redundancy);
+
+      cerr << "  - Loss rate (sample/EWMA): " << double_to_string(max(0.0, sample_loss))
+           << "/" << double_to_string(redundancy_controller_.loss_rate())
+           << " (Sent: " << packets_sent_stat_ << ", Acked: " << acks_received_stat_ << ")"
+           << " -> New Redundancy: " << double_to_string(new_redundancy) << endl;
+    } else {
+      cerr << "  - Loss rate: " << double_to_string(max(0.0, sample_loss))
+           << " (Sent: " << packets_sent_stat_ << ", Acked: " << acks_received_stat_ << ")"
+           << " [fixed redundancy]" << endl;
+    }
   }
+
+  // output cumulative stats
+  cerr << "  - Cumulative: tx_bytes=" << total_tx_bytes_
+       << " tx_pkts=" << total_tx_packets_
+       << " repair_pkts=" << total_repair_packets_
+       << " retrans_pkts=" << total_retrans_packets_ << endl;
 
   // reset all but RTT-related stats
   num_encoded_frames_ = 0;

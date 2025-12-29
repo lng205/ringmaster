@@ -57,6 +57,10 @@ void Frame::insert_frag(Datagram && datagram)
   if (not frags_[pos]) {
     if (datagram.fec_type == FECType::DATA) {
       frame_size_ += datagram.payload.size();
+      // record send_ts from first DATA packet
+      if (send_ts_ == 0) {
+        send_ts_ = datagram.send_ts;
+      }
     }
     frag_need_--;
     frags_[pos] = move(datagram);
@@ -170,9 +174,11 @@ void Decoder::consume_next_frame()
   const size_t frame_size = frame.frame_size().value();
   total_decodable_frame_size_ += frame_size;
 
-  // count recovered packets
+  // count recovered packets (FEC recovered = missing DATA packets)
+  int fec_recovered = 0;
   for (int i = 0; i < frame.frag_cnt(); i++) {
     if (not frame.frags()[i].has_value()) {
+      fec_recovered++;
       total_recovered_pkts_++;
     }
   }
@@ -209,6 +215,10 @@ void Decoder::consume_next_frame()
     }
   }
 
+  // capture timing and stats before potentially moving frame
+  const auto frame_decodable_ts = timestamp_us();
+  const auto frame_send_ts = frame.send_ts();
+
   if (lazy_level_ <= DECODE_ONLY) {
     // dispatch the frame to worker thread
     {
@@ -218,15 +228,15 @@ void Decoder::consume_next_frame()
 
     // notify worker thread
     cv_.notify_one();
-  } else {
-    // main thread outputs frame information if no worker thread
-    if (output_fd_) {
-      const auto frame_decodable_ts = timestamp_us();
+  }
 
-      output_fd_->write(to_string(next_frame_) + "," +
-                        to_string(frame_size) + "," +
-                        to_string(frame_decodable_ts) + "\n");
-    }
+  // output frame log (CSV format: frame_id,t_send_ms,t_dec_ms,decoded_ok,fec_recovered)
+  if (output_fd_) {
+    output_fd_->write(to_string(next_frame_) + "," +
+                      to_string(frame_send_ts / 1000) + "," +
+                      to_string(frame_decodable_ts / 1000) + "," +
+                      "1," +
+                      to_string(fec_recovered) + "\n");
   }
 
   // move onto the next frame
@@ -372,13 +382,7 @@ void Decoder::worker_main()
       const Frame & frame = local_queue.front();
       const double decode_time_ms = decode_frame(context, frame);
 
-      if (output_fd_) {
-        const auto frame_decoded_ts = timestamp_us();
-
-        output_fd_->write(to_string(frame.id()) + "," +
-                          to_string(frame.frame_size().value()) + "," +
-                          to_string(frame_decoded_ts) + "\n");
-      }
+      // Note: frame log is already written in consume_next_frame()
 
       if (display) {
         display_decoded_frame(context, *display);

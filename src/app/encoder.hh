@@ -47,6 +47,12 @@ public:
   // set redundancy
   void set_redundancy(const float redundancy);
 
+  // set fixed redundancy (disable dynamic adjustment)
+  void set_fixed_redundancy(const bool fixed) { fixed_redundancy_ = fixed; }
+
+  // set ARQ enabled
+  void set_enable_arq(const bool enable) { enable_arq_ = enable; }
+
   // accessors
   uint32_t frame_id() const { return frame_id_; }
   std::deque<Datagram> & send_buf() { return send_buf_; }
@@ -69,6 +75,12 @@ private:
 
   // print debugging info
   bool verbose_ {false};
+
+  // fixed redundancy (disable dynamic adjustment)
+  bool fixed_redundancy_ {false};
+
+  // ARQ enabled
+  bool enable_arq_ {true};
 
   // current target bitrate
   unsigned int target_bitrate_ {0};
@@ -100,6 +112,12 @@ private:
   double max_encode_time_ms_ {0.0};
   unsigned int packets_sent_stat_ {0};
   unsigned int acks_received_stat_ {0};
+
+  // cumulative stats for experiment
+  uint64_t total_tx_bytes_ {0};
+  unsigned int total_tx_packets_ {0};
+  unsigned int total_repair_packets_ {0};
+  unsigned int total_retrans_packets_ {0};
 
   // constants
   static constexpr unsigned int MAX_NUM_RTX = 3;
