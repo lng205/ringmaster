@@ -152,7 +152,6 @@ def plot_figure1():
     
     ax.set_xlabel('丢包率/%')
     ax.set_ylabel('帧可解码率/%')
-    ax.set_title('(a) 帧可解码率与丢包率的关系')
     ax.set_xlim(-1, 21)
     ax.set_ylim(0, 105)
     ax.set_xticks(losses)
@@ -196,7 +195,6 @@ def plot_figure2():
     
     ax.set_xlabel('丢包率/%')
     ax.set_ylabel('平均帧延迟/ms')
-    ax.set_title('(b) 平均帧延迟与丢包率的关系')
     ax.set_xlim(-1, 21)
     ax.set_xticks(losses)
     ax.grid(True, linestyle='--', alpha=0.5, color='gray')
@@ -234,7 +232,6 @@ def plot_figure3():
     
     ax.set_xlabel('网络时延/ms')
     ax.set_ylabel('帧可解码率/%')
-    ax.set_title('(c) 不同时延下的帧可解码率（丢包率=10%）')
     ax.set_xticks(x)
     ax.set_xticklabels([f'{d}' for d in delays_list])
     ax.set_ylim(0, 110)
@@ -273,7 +270,6 @@ def plot_figure4():
     
     ax.set_xlabel('网络时延/ms')
     ax.set_ylabel('平均帧延迟/ms')
-    ax.set_title('(d) 不同时延下的平均帧延迟（丢包率=10%）')
     ax.set_xticks(x)
     ax.set_xticklabels([f'{d}' for d in delays_list])
     ax.grid(True, linestyle='--', alpha=0.5, axis='y', color='gray')
