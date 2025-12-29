@@ -239,7 +239,7 @@ def plot_figure3():
     ax.set_xticklabels([f'{d}' for d in delays_list])
     ax.set_ylim(0, 110)
     ax.grid(True, linestyle='--', alpha=0.5, axis='y', color='gray')
-    ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), framealpha=0.95, edgecolor='black')
+    ax.legend(loc='lower right', framealpha=0.95, edgecolor='black')
     
     plt.tight_layout()
     plt.savefig('results/fig3_delay_sensitivity.png', bbox_inches='tight', facecolor='white')
