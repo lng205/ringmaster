@@ -26,7 +26,6 @@ public:
   Frame(const uint32_t frame_id,
         const FrameType frame_type,
         const uint16_t frag_cnt,
-        const uint16_t repair_cnt,
         const size_t padding_size);
 
   // insert a fragment into the frame
@@ -41,6 +40,8 @@ public:
   FrameType type() const { return type_; }
   const std::vector<std::optional<Datagram>> & frags() const { return frags_; }
   uint16_t frag_cnt() const { return frag_cnt_; }
+  uint64_t send_ts() const { return send_ts_; }
+  int fec_recovered() const { return fec_recovered_; }
 
 private:
   uint32_t id_;    // frame ID
@@ -51,6 +52,8 @@ private:
   size_t padding_size_; // padding size
   size_t frame_size_ {0}; // frame size so far
   uint16_t frag_cnt_; // total data fragments
+  uint64_t send_ts_ {0}; // send timestamp of first DATA packet
+  int fec_recovered_ {0}; // number of packets recovered by FEC
 
   // validate if a datagram belongs to this frame
   void validate_datagram(const Datagram & datagram) const;
@@ -112,6 +115,7 @@ private:
 
   // performance stats
   unsigned int num_decodable_frames_ {0};
+  unsigned int total_recovered_pkts_ {0};
   size_t total_decodable_frame_size_ {0}; // bytes
   std::chrono::time_point<std::chrono::steady_clock> last_stats_time_ {};
 

@@ -9,11 +9,10 @@ Datagram::Datagram(const uint32_t _frame_id,
                    const FECType _fec_type,
                    const uint16_t _frag_id,
                    const uint16_t _frag_cnt,
-                    const uint16_t _repair_cnt,
                    const uint16_t _padding,
                    const string_view _payload)
   : frame_id(_frame_id), frame_type(_frame_type), fec_type(_fec_type),
-    frag_id(_frag_id), frag_cnt(_frag_cnt), repair_cnt(_repair_cnt),
+    frag_id(_frag_id), frag_cnt(_frag_cnt),
     padding(_padding), payload(_payload)
 {}
 
@@ -41,7 +40,6 @@ bool Datagram::parse_from_string(const string & binary)
   fec_type = static_cast<FECType>(parser.read_uint8());
   frag_id = parser.read_uint16();
   frag_cnt = parser.read_uint16();
-  repair_cnt = parser.read_uint16();
   padding = parser.read_uint16();
   send_ts = parser.read_uint64();
   payload = parser.read_string();
@@ -59,7 +57,6 @@ string Datagram::serialize_to_string() const
   binary += put_number(static_cast<uint8_t>(fec_type));
   binary += put_number(frag_id);
   binary += put_number(frag_cnt);
-  binary += put_number(repair_cnt);
   binary += put_number(padding);
   binary += put_number(send_ts);
   binary += payload;
@@ -99,6 +96,12 @@ shared_ptr<Msg> Msg::parse_from_string(const string & binary)
     ret->height = parser.read_uint16();
     ret->frame_rate = parser.read_uint16();
     ret->target_bitrate = parser.read_uint32();
+    return ret;
+  }
+  else if (type == Type::HOP_ACK) {
+    auto ret = make_shared<HopAckMsg>();
+    ret->frame_id = parser.read_uint32();
+    ret->frag_id = parser.read_uint16();
     return ret;
   }
   else {
@@ -155,6 +158,31 @@ string ConfigMsg::serialize_to_string() const
   binary += put_number(height);
   binary += put_number(frame_rate);
   binary += put_number(target_bitrate);
+
+  return binary;
+}
+
+HopAckMsg::HopAckMsg(const Datagram & datagram)
+  : Msg(Type::HOP_ACK), frame_id(datagram.frame_id), frag_id(datagram.frag_id)
+{}
+
+HopAckMsg::HopAckMsg(const uint32_t _frame_id, const uint16_t _frag_id)
+  : Msg(Type::HOP_ACK), frame_id(_frame_id), frag_id(_frag_id)
+{}
+
+size_t HopAckMsg::serialized_size() const
+{
+  return Msg::serialized_size() + sizeof(uint32_t) + sizeof(uint16_t);
+}
+
+string HopAckMsg::serialize_to_string() const
+{
+  string binary;
+  binary.reserve(serialized_size());
+
+  binary += Msg::serialize_to_string();
+  binary += put_number(frame_id);
+  binary += put_number(frag_id);
 
   return binary;
 }

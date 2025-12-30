@@ -1,0 +1,90 @@
+# Ringmaster FEC 系统算法设计文档
+
+## 1. 概述
+Ringmaster 采用基于 **RLNC (Random Linear Network Coding，随机线性网络编码)** 的帧内前向纠错方案。该方案结合了 UDP 传输的低延迟特性与网络编码的高鲁棒性，旨在对抗实时视频传输中的丢包问题。
+
+## 2. 核心机制
+
+### 2.1 分片与封装 (Segmentation)
+*   **输入**: 编码后的视频帧 (Frame)。
+*   **计算参数**:
+    1.  **目标**: 将大小为 $S$ 的视频帧切分为 $k$ 个数据包，使得每个包（含头部）不超过 MTU。
+    2.  **迭代求解 $k$**:
+        *   初始猜测 $k = \lceil S / (MTU_{payload} - k_{overhead}) \rceil$。
+        *   计算每个分片的**数据载荷大小 (Block Size)**: $B = \lceil S / k \rceil$。
+        *   **内存对齐**: 将 $B$ 向上取整为 `SIZE_ALIGN` (16字节) 的倍数，以优化 SIMD/CPU 处理效率。
+        *   **校验**: 检查 $B + k \le MTU_{payload}$。若不满足，则增加 $k$ 并重试。
+*   **填充 (Padding)**:
+    *   为了使所有分片等长且满足对齐要求，原始帧末尾需要填充 0。
+    *   **填充量计算**: $PaddingSize = (k \times B) - S$。该值记录在协议头部，供解码端去除。
+*   **Payload 结构**:
+    ```
+    [ 编码系数 (k 字节) ] + [ 数据块 (Block Size 字节) ]
+    ```
+    *   **设计决策 (Coefficient Placement)**: 编码系数置于 Payload 首部而非协议 Header。
+        *   **原因**: $k$ 是动态的，会导致变长 Header，增加解析复杂度；更重要的是，将系数包含在 Payload 中允许重编码操作将“系数+数据”视为整体进行盲线性组合，极大地简化了中间节点的实现逻辑。
+
+### 2.2 帧结构与管理 (Frame Management)
+接收端使用 `Frame` 类（位于 `src/app/decoder.hh`）来管理属于同一视频帧的所有分片。
+*   **存储结构**: 包含一个 `std::vector` (`frags_`)，初始大小分配为 $k$，并根据接收到的包动态扩展，用于存放接收到的 `Datagram`。
+    *   索引 $0 \dots k-1$: 存放原始数据包 (DATA)。
+    *   索引 $k \dots k+m-1$: 存放修复数据包 (REPAIR)。
+*   **完整性追踪**: 维护 `frag_need_` 计数器，初始值为 $k$。
+    *   每收到一个不重复的包（无论 DATA 或 REPAIR），`frag_need_` 减 1。
+    *   当 `frag_need_ <= 0` 时，标记该帧为 **Complete**，触发解码尝试。
+*   **优势**: 统一管理原始包和修复包，自动适配 RLNC 的“凑齐 $k$ 个包即可解码”的特性，无需复杂的丢包判定逻辑。
+
+### 2.3 协议头部设计 (Protocol Header)
+每个 UDP 数据包包含一个紧凑的二进制头部 (`Datagram` 结构，定义于 `src/app/protocol.hh`)，共 **20 字节**（含 UDP/IP 头开销则更多）。
+*   **Frame ID** (4B): 视频帧序列号，用于区分不同帧。
+*   **Frame Type** (1B): 帧类型（KEY关键帧 / NONKEY非关键帧）。
+*   **FEC Type** (1B): 包类型（DATA原始数据 / REPAIR修复数据）。
+*   **Frag ID** (2B): 分片索引。对于 DATA 包是 $0 \dots k-1$，对于 REPAIR 包则使用随机生成的 ID (防止接收端存储冲突)。
+*   **Frag Count** (2B): 原始分片总数 $k$。解码端据此得知系数长度。
+*   **Padding** (2B): 原始帧末尾填充的字节数，用于解码后还原精确大小。
+*   **Send Timestamp** (8B): 发送时间戳，用于 RTT 估算。
+
+### 2.4 编码 (Encoding)
+发送端生成两类数据包：
+1.  **原始包 (Systematic Packets)**:
+    *   **系数**: 单位向量 (第 $i$ 个包的系数仅第 $i$ 位为 1，其余为 0)。
+    *   **数据**: 原始视频分片。
+2.  **修复包 (Repair Packets)**:
+    *   **系数**: 在 $GF(2^8)$ 域上随机生成的 $k$ 维向量。
+    *   **数据**: 所有 $k$ 个原始分片的随机线性组合。
+    *   **计算**: $RepairData = \sum_{i=0}^{k-1} (Coeff_i \times OriginalData_i)$
+
+### 2.5 解码 (Decoding)
+接收端缓冲同一帧的数据包，当包总数 $\ge k$ 时尝试解码。
+*   **快速路径 (Fast Path)**: 若收齐所有 $k$ 个原始包，直接剥离系数头并拼接数据，零计算开销。
+*   **慢速路径 (Slow Path)**: 若存在原始包丢失：
+    1.  **构建矩阵**: 提取所有包头部的 $k$ 字节系数构成矩阵 $A$，数据部分构成向量 $b$。
+    2.  **高斯消元**: 使用高斯-约旦消元法 (Gauss-Jordan Elimination) 在 $GF(2^8)$ 上将系数矩阵化为单位矩阵。
+    3.  **恢复**: 伴随行变换，数据部分被还原为原始分片。
+
+### 2.6 动态冗余调整 (Dynamic Redundancy Adjustment)
+发送端根据接收端反馈的 ACK 统计丢包率，并动态调整 FEC 的冗余度，以在网络波动时保持恢复能力。
+
+*   **指标计算 (EWMA 平滑)**:
+    *   统计窗口: 每 1 秒。
+    *   **瞬时丢包率 ($L_{sample}$)**: $L_{sample} = 1.0 - \frac{\text{AckedPackets}}{\text{SentPackets}}$。
+    *   **平滑丢包率 ($L_{smoothed}$)**: 采用指数加权移动平均 (EWMA) 过滤瞬时抖动。
+        $$ L_{smoothed} = \alpha \times L_{sample} + (1 - \alpha) \times L_{old} $$
+        其中平滑因子 $\alpha = 0.2$。
+    *   **冗余度调整公式**:
+        *   基于平滑后的丢包率 $L_{smoothed}$ 计算。
+        *   理论要求: $(1 - L) \times (1 + R) \ge 1 \Rightarrow R \ge \frac{L}{1 - L}$。
+        *   **实际公式**: 乘以安全因子 ($Factor = 1.1$)，即增加 10% 的相对余量。
+            $$ R_{new} = \frac{L_{smoothed} \times Factor}{1 - (L_{smoothed} \times Factor)} $$
+    *   **边界限制**:
+        *   最小冗余 $R_{min} = 0.0$ (当 $L=0$ 时不浪费带宽)。
+        *   最大冗余 $R_{max} = 0.5$ (50%，防止过度抢占带宽)。
+    *   **实施**: 计算出的新冗余度 ($R_{new}$) 立即应用于下一帧的 FEC 编码参数。
+## 3. 关键特性
+*   **帧内编码 (Intra-frame Only)**: 仅对同一视频帧内的包进行编码，避免跨帧编码带来的额外延迟。
+*   **混合纠错 (Hybrid FEC/ARQ)**: FEC 负责恢复随机丢包，接收端对恢复出的包发送 ACK；若 FEC 失败，回退到 ARQ 重传机制。
+*   **零拷贝优化**: 在快速路径和解码组装阶段尽可能减少内存拷贝。
+
+## 4. 数学基础
+*   **有限域**: 所有运算均在 $GF(2^8)$ 上进行，保证计算结果（如系数、数据字节）始终在一个字节范围内。
+*   **线性无关**: 解码成功的充要条件是接收到的系数矩阵满秩 (Rank $= k$)。由于系数随机生成，当 $接收包数 > k$ 时，线性相关的概率极低。

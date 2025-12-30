@@ -2,6 +2,7 @@ add_library(app
     encoder.cc
     decoder.cc
     protocol.cc
+    redundancy_controller.cc
 )
 
 target_include_directories(app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

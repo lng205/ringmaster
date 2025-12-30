@@ -16,9 +16,8 @@ using namespace chrono;
 Frame::Frame(const uint32_t frame_id,
              const FrameType frame_type,
              const uint16_t frag_cnt,
-             const uint16_t repair_cnt,
              const size_t padding_size)
-  : id_(frame_id), type_(frame_type), frags_(frag_cnt + repair_cnt),
+  : id_(frame_id), type_(frame_type), frags_(frag_cnt),
   frag_need_(frag_cnt), padding_size_(padding_size), frag_cnt_(frag_cnt)
 {
   if (frag_cnt == 0) {
@@ -51,9 +50,17 @@ void Frame::insert_frag(Datagram && datagram)
   datagram.frag_id : datagram.frag_id + datagram.frag_cnt;
 
   // insert only if the datagram does not exist yet
+  if (pos >= frags_.size()) {
+    frags_.resize(pos + 1);
+  }
+
   if (not frags_[pos]) {
     if (datagram.fec_type == FECType::DATA) {
       frame_size_ += datagram.payload.size();
+      // record send_ts from first DATA packet
+      if (send_ts_ == 0) {
+        send_ts_ = datagram.send_ts;
+      }
     }
     frag_need_--;
     frags_[pos] = move(datagram);
@@ -94,7 +101,6 @@ bool Decoder::add_datagram_common(const Datagram & datagram)
   const auto frame_id = datagram.frame_id;
   const auto frame_type = datagram.frame_type;
   const auto frag_cnt = datagram.frag_cnt;
-  const auto repair_cnt = datagram.repair_cnt;
   const auto padding = datagram.padding;
 
   // ignore any datagrams from the old frames
@@ -107,7 +113,7 @@ bool Decoder::add_datagram_common(const Datagram & datagram)
     frame_buf_.emplace(piecewise_construct,
                        forward_as_tuple(frame_id),
                        forward_as_tuple(frame_id, frame_type, frag_cnt,
-                                        repair_cnt, padding));
+                                        padding));
   }
 
   return true;
@@ -168,10 +174,23 @@ void Decoder::consume_next_frame()
   const size_t frame_size = frame.frame_size().value();
   total_decodable_frame_size_ += frame_size;
 
+  // count recovered packets (FEC recovered = missing DATA packets)
+  int fec_recovered = 0;
+  for (int i = 0; i < frame.frag_cnt(); i++) {
+    if (not frame.frags()[i].has_value()) {
+      fec_recovered++;
+      total_recovered_pkts_++;
+    }
+  }
+
   const auto stats_now = steady_clock::now();
   while (stats_now >= last_stats_time_ + 1s) {
     cerr << "Decodable frames in the last ~1s: "
          << num_decodable_frames_ << endl;
+    
+    if (total_recovered_pkts_ > 0) {
+      cerr << "  - Recovered packets: " << total_recovered_pkts_ << endl;
+    }
 
     const double diff_ms = duration<double, milli>(
                            stats_now - last_stats_time_).count();
@@ -184,6 +203,7 @@ void Decoder::consume_next_frame()
     // reset stats
     num_decodable_frames_ = 0;
     total_decodable_frame_size_ = 0;
+    total_recovered_pkts_ = 0;
     last_stats_time_ += 1s;
   }
 
@@ -195,6 +215,10 @@ void Decoder::consume_next_frame()
     }
   }
 
+  // capture timing and stats before potentially moving frame
+  const auto frame_decodable_ts = timestamp_us();
+  const auto frame_send_ts = frame.send_ts();
+
   if (lazy_level_ <= DECODE_ONLY) {
     // dispatch the frame to worker thread
     {
@@ -204,15 +228,15 @@ void Decoder::consume_next_frame()
 
     // notify worker thread
     cv_.notify_one();
-  } else {
-    // main thread outputs frame information if no worker thread
-    if (output_fd_) {
-      const auto frame_decodable_ts = timestamp_us();
+  }
 
-      output_fd_->write(to_string(next_frame_) + "," +
-                        to_string(frame_size) + "," +
-                        to_string(frame_decodable_ts) + "\n");
-    }
+  // output frame log (CSV format: frame_id,t_send_ms,t_dec_ms,decoded_ok,fec_recovered)
+  if (output_fd_) {
+    output_fd_->write(to_string(next_frame_) + "," +
+                      to_string(frame_send_ts / 1000) + "," +
+                      to_string(frame_decodable_ts / 1000) + "," +
+                      "1," +
+                      to_string(fec_recovered) + "\n");
   }
 
   // move onto the next frame
@@ -257,7 +281,7 @@ double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
     if (datagram) {
       datagrams.emplace_back(make_optional<FECDatagram>(
         datagram->frame_id, datagram->fec_type, datagram->frag_id,
-        datagram->frag_cnt, datagram->repair_cnt, datagram->padding,
+        datagram->frag_cnt, datagram->padding,
         datagram->payload
       ));
     } else {
@@ -265,6 +289,11 @@ double Decoder::decode_frame(vpx_codec_ctx_t & context, const Frame & frame)
     }
   }
   vector<uint8_t> decode_buf = fec_.decode(datagrams);
+
+  if (decode_buf.empty()) {
+    cerr << "Warning: FEC failed to recover frame " << frame.id() << endl;
+    return 0.0;
+  }
 
   // decode the compressed frame in 'decode_buf'
   const auto decode_start = steady_clock::now();
@@ -353,13 +382,7 @@ void Decoder::worker_main()
       const Frame & frame = local_queue.front();
       const double decode_time_ms = decode_frame(context, frame);
 
-      if (output_fd_) {
-        const auto frame_decoded_ts = timestamp_us();
-
-        output_fd_->write(to_string(frame.id()) + "," +
-                          to_string(frame.frame_size().value()) + "," +
-                          to_string(frame_decoded_ts) + "\n");
-      }
+      // Note: frame log is already written in consume_next_frame()
 
       if (display) {
         display_decoded_frame(context, *display);

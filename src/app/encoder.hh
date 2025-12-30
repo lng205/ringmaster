@@ -15,6 +15,7 @@ extern "C" {
 #include "image.hh"
 #include "protocol.hh"
 #include "file_descriptor.hh"
+#include "redundancy_controller.hh"
 
 class Encoder
 {
@@ -23,7 +24,8 @@ public:
   Encoder(const uint16_t display_width,
           const uint16_t display_height,
           const uint16_t frame_rate,
-          const std::string & output_path = "");
+          const std::string & output_path = "",
+          const float redundancy = 1.0);
   ~Encoder();
 
   // encode raw_img and packetize into datagrams
@@ -33,14 +35,26 @@ public:
   void add_unacked(const Datagram & datagram);
   void add_unacked(Datagram && datagram);
 
-  // handle ACK
+  // handle ACK (for RTT estimation and ARQ)
   void handle_ack(const std::shared_ptr<AckMsg> & ack);
+
+  // handle HOP_ACK (for redundancy adjustment)
+  void handle_hop_ack(const std::shared_ptr<HopAckMsg> & hop_ack);
 
   // output stats every second and reset some of them
   void output_periodic_stats();
 
   // set target bitrate
   void set_target_bitrate(const unsigned int bitrate_kbps);
+
+  // set redundancy
+  void set_redundancy(const float redundancy);
+
+  // set fixed redundancy (disable dynamic adjustment)
+  void set_fixed_redundancy(const bool fixed) { fixed_redundancy_ = fixed; }
+
+  // set ARQ enabled
+  void set_enable_arq(const bool enable) { enable_arq_ = enable; }
 
   // accessors
   uint32_t frame_id() const { return frame_id_; }
@@ -65,6 +79,12 @@ private:
   // print debugging info
   bool verbose_ {false};
 
+  // fixed redundancy (disable dynamic adjustment)
+  bool fixed_redundancy_ {false};
+
+  // ARQ enabled
+  bool enable_arq_ {true};
+
   // current target bitrate
   unsigned int target_bitrate_ {0};
 
@@ -86,10 +106,22 @@ private:
   std::optional<double> ewma_rtt_us_ {};
   static constexpr double ALPHA = 0.2;
 
+  // redundancy controller
+  RedundancyController redundancy_controller_ {};
+
   // performance stats
   unsigned int num_encoded_frames_ {0};
   double total_encode_time_ms_ {0.0};
   double max_encode_time_ms_ {0.0};
+  unsigned int packets_sent_stat_ {0};
+  unsigned int acks_received_stat_ {0};      // end-to-end ACKs (for RTT/ARQ)
+  unsigned int hop_acks_received_stat_ {0};  // hop ACKs (for redundancy)
+
+  // cumulative stats for experiment
+  uint64_t total_tx_bytes_ {0};
+  unsigned int total_tx_packets_ {0};
+  unsigned int total_repair_packets_ {0};
+  unsigned int total_retrans_packets_ {0};
 
   // constants
   static constexpr unsigned int MAX_NUM_RTX = 3;

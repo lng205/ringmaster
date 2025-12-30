@@ -24,7 +24,6 @@ struct Datagram
            const FECType _fec_type,
            const uint16_t _frag_id,
            const uint16_t _frag_cnt,
-           const uint16_t _repair_cnt,
            const uint16_t _padding,
            const std::string_view _payload);
 
@@ -33,10 +32,9 @@ struct Datagram
   FECType fec_type {};     // FEC type (3)
   uint16_t frag_id {};     // fragment ID in this frame (4)
   uint16_t frag_cnt {};    // total fragments in this frame (5)
-  uint16_t repair_cnt {};  // total repair fragments in this frame (6)
-  uint16_t padding {};     // padding size (7)
-  uint64_t send_ts {};     // timestamp (us) when the datagram is sent (8)
-  std::string payload {};  // payload (9)
+  uint16_t padding {};     // padding size (6)
+  uint64_t send_ts {};     // timestamp (us) when the datagram is sent (7)
+  std::string payload {};  // payload (8)
 
   // retransmission-related
   unsigned int num_rtx {0};
@@ -44,7 +42,7 @@ struct Datagram
 
   // header size after serialization
   static constexpr size_t HEADER_SIZE = sizeof(uint32_t) +
-      2 * sizeof(uint8_t) + 4 * sizeof(uint16_t) + sizeof(uint64_t);
+      2 * sizeof(uint8_t) + 3 * sizeof(uint16_t) + sizeof(uint64_t);
 
   // maximum size for 'payload' (initialized in .cc and modified by set_mtu())
   static size_t max_payload;
@@ -60,9 +58,10 @@ struct Datagram
 struct Msg
 {
   enum class Type : uint8_t {
-    INVALID = 0, // invalid message type
-    ACK = 1,     // AckMsg
-    CONFIG = 2   // ConfigMsg
+    INVALID = 0,  // invalid message type
+    ACK = 1,      // AckMsg
+    CONFIG = 2,   // ConfigMsg
+    HOP_ACK = 3   // HopAckMsg (hop-by-hop acknowledgment)
   };
 
   Type type {Type::INVALID}; // message type
@@ -107,6 +106,20 @@ struct ConfigMsg : Msg
   uint16_t height {};         // display height
   uint16_t frame_rate {};     // FPS
   uint32_t target_bitrate {}; // target bitrate
+
+  size_t serialized_size() const override;
+  std::string serialize_to_string() const override;
+};
+
+// Hop-by-hop ACK for measuring per-link loss rate
+struct HopAckMsg : Msg
+{
+  HopAckMsg() : Msg(Type::HOP_ACK) {}
+  HopAckMsg(const Datagram & datagram);
+  HopAckMsg(uint32_t frame_id, uint16_t frag_id);
+
+  uint32_t frame_id {};  // frame ID
+  uint16_t frag_id {};   // fragment ID
 
   size_t serialized_size() const override;
   std::string serialize_to_string() const override;

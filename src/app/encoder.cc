@@ -17,9 +17,10 @@ using namespace chrono;
 Encoder::Encoder(const uint16_t display_width,
                  const uint16_t display_height,
                  const uint16_t frame_rate,
-                 const string & output_path)
+                 const string & output_path,
+                 const float redundancy)
   : display_width_(display_width), display_height_(display_height),
-    frame_rate_(frame_rate), output_fd_(), fec_(Datagram::max_payload, 1)
+    frame_rate_(frame_rate), output_fd_(), fec_(Datagram::max_payload, redundancy)
 {
   // open the output file
   if (not output_path.empty()) {
@@ -212,7 +213,7 @@ size_t Encoder::packetize_encoded_frame()
 
       for (FECDatagram & datagram : fec_datagrams) {
         send_buf_.emplace_back(frame_id_, frame_type, datagram.fec_type,
-          datagram.frag_id, datagram.frag_cnt, datagram.repair_cnt,
+          datagram.frag_id, datagram.frag_cnt,
           datagram.padding, datagram.payload);
       }
     }
@@ -223,7 +224,14 @@ size_t Encoder::packetize_encoded_frame()
 
 void Encoder::add_unacked(Datagram && datagram)
 {
-  if (datagram.fec_type == FECType::REPAIR) return;
+  // track stats for all packets
+  total_tx_packets_++;
+  total_tx_bytes_ += Datagram::HEADER_SIZE + datagram.payload.size();
+
+  if (datagram.fec_type == FECType::REPAIR) {
+    total_repair_packets_++;
+    return;
+  }
 
   const auto seq_num = make_pair(datagram.frame_id, datagram.frag_id);
   auto [it, success] = unacked_.emplace(seq_num, move(datagram));
@@ -233,6 +241,7 @@ void Encoder::add_unacked(Datagram && datagram)
   }
 
   it->second.last_send_ts = it->second.send_ts;
+  packets_sent_stat_++;
 }
 
 void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
@@ -253,29 +262,44 @@ void Encoder::handle_ack(const shared_ptr<AckMsg> & ack)
     return;
   }
 
-  // // retransmit all unacked datagrams before the acked one (backward)
-  // for (auto rit = make_reverse_iterator(acked_it);
-  //      rit != unacked_.rend(); rit++) {
-  //   auto & datagram = rit->second;
+  // only count ACKs for packets received without retransmission
+  // to measure raw network loss rate
+  if (ack->send_ts > 0 && acked_it->second.num_rtx == 0) {
+    acks_received_stat_++;
+  }
 
-  //   // skip if a datagram has been retransmitted MAX_NUM_RTX times
-  //   if (datagram.num_rtx >= MAX_NUM_RTX) {
-  //     continue;
-  //   }
+  // retransmit all unacked datagrams before the acked one (backward)
+  if (enable_arq_ and ewma_rtt_us_) {
+    for (auto rit = make_reverse_iterator(acked_it);
+         rit != unacked_.rend(); rit++) {
+      auto & datagram = rit->second;
 
-  //   // retransmit if it's the first RTX or the last RTX was about one RTT ago
-  //   if (datagram.num_rtx == 0 or
-  //       curr_ts - datagram.last_send_ts > ewma_rtt_us_.value()) {
-  //     datagram.num_rtx++;
-  //     datagram.last_send_ts = curr_ts;
+      // skip if a datagram has been retransmitted MAX_NUM_RTX times
+      if (datagram.num_rtx >= MAX_NUM_RTX) {
+        continue;
+      }
 
-  //     // retransmissions are more urgent
-  //     send_buf_.emplace_front(datagram);
-  //   }
-  // }
+      // retransmit if it's the first RTX or the last RTX was about one RTT ago
+      if (datagram.num_rtx == 0 or
+          curr_ts - datagram.last_send_ts > ewma_rtt_us_.value()) {
+        datagram.num_rtx++;
+        datagram.last_send_ts = curr_ts;
+
+        // retransmissions are more urgent
+        send_buf_.emplace_front(datagram);
+        total_retrans_packets_++;
+      }
+    }
+  }
 
   // finally, erase the acked datagram from 'unacked_'
   unacked_.erase(acked_it);
+}
+
+void Encoder::handle_hop_ack(const shared_ptr<HopAckMsg> & hop_ack)
+{
+  // HOP_ACK is used for measuring first-hop loss rate (for redundancy adjustment)
+  hop_acks_received_stat_++;
 }
 
 void Encoder::add_rtt_sample(const unsigned int rtt_us)
@@ -308,10 +332,43 @@ void Encoder::output_periodic_stats()
          << "/" << double_to_string(*ewma_rtt_us_ / 1000.0) << endl;
   }
 
+  if (packets_sent_stat_ > 0) {
+    // Use HOP_ACK for first-hop loss rate (for redundancy adjustment)
+    double hop_loss = 1.0 - static_cast<double>(hop_acks_received_stat_) / packets_sent_stat_;
+    // End-to-end loss for reference
+    double e2e_loss = 1.0 - static_cast<double>(acks_received_stat_) / packets_sent_stat_;
+
+    if (not fixed_redundancy_) {
+      // Adjust redundancy based on first-hop loss (HOP_ACK)
+      float new_redundancy = redundancy_controller_.update(packets_sent_stat_, hop_acks_received_stat_);
+      set_redundancy(new_redundancy);
+
+      cerr << "  - First-hop loss (sample/EWMA): " << double_to_string(max(0.0, hop_loss))
+           << "/" << double_to_string(redundancy_controller_.loss_rate())
+           << " (Sent: " << packets_sent_stat_ << ", HopAcked: " << hop_acks_received_stat_ << ")"
+           << " -> New Redundancy: " << double_to_string(new_redundancy) << endl;
+      cerr << "  - End-to-end loss: " << double_to_string(max(0.0, e2e_loss))
+           << " (E2E Acked: " << acks_received_stat_ << ")" << endl;
+    } else {
+      cerr << "  - First-hop loss: " << double_to_string(max(0.0, hop_loss))
+           << " (Sent: " << packets_sent_stat_ << ", HopAcked: " << hop_acks_received_stat_ << ")"
+           << " [fixed redundancy]" << endl;
+    }
+  }
+
+  // output cumulative stats
+  cerr << "  - Cumulative: tx_bytes=" << total_tx_bytes_
+       << " tx_pkts=" << total_tx_packets_
+       << " repair_pkts=" << total_repair_packets_
+       << " retrans_pkts=" << total_retrans_packets_ << endl;
+
   // reset all but RTT-related stats
   num_encoded_frames_ = 0;
   total_encode_time_ms_ = 0.0;
   max_encode_time_ms_ = 0.0;
+  packets_sent_stat_ = 0;
+  acks_received_stat_ = 0;
+  hop_acks_received_stat_ = 0;
 }
 
 void Encoder::set_target_bitrate(const unsigned int bitrate_kbps)
@@ -322,3 +379,9 @@ void Encoder::set_target_bitrate(const unsigned int bitrate_kbps)
   check_call(vpx_codec_enc_config_set(&context_, &cfg_),
              VPX_CODEC_OK, "set_target_bitrate");
 }
+
+void Encoder::set_redundancy(const float redundancy)
+{
+  fec_.set_redundancy(redundancy);
+}
+

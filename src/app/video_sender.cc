@@ -30,7 +30,10 @@ void print_usage(const string & program_name)
   "Options:\n"
   "--mtu <MTU>                MTU for deciding UDP payload size\n"
   "-o, --output <file>        file to output performance results to\n"
-  "-v, --verbose              enable more logging for debugging"
+  "-v, --verbose              enable more logging for debugging\n"
+  "-R, --redundancy <R>       FEC redundancy ratio (default: 1.0)\n"
+  "--fixed-redundancy         disable dynamic redundancy adjustment\n"
+  "--no-arq                   disable ARQ retransmission"
   << endl;
 }
 
@@ -57,16 +60,22 @@ int main(int argc, char * argv[])
   // argument parsing
   string output_path;
   bool verbose = false;
+  float redundancy = 1.0;
+  bool fixed_redundancy = false;
+  bool enable_arq = true;
 
   const option cmd_line_opts[] = {
     {"mtu",     required_argument, nullptr, 'M'},
     {"output",  required_argument, nullptr, 'o'},
     {"verbose", no_argument,       nullptr, 'v'},
+    {"redundancy", required_argument, nullptr, 'R'},
+    {"fixed-redundancy", no_argument, nullptr, 'F'},
+    {"no-arq", no_argument, nullptr, 'A'},
     { nullptr,  0,                 nullptr,  0 },
   };
 
   while (true) {
-    const int opt = getopt_long(argc, argv, "o:v", cmd_line_opts, nullptr);
+    const int opt = getopt_long(argc, argv, "o:vR:", cmd_line_opts, nullptr);
     if (opt == -1) {
       break;
     }
@@ -80,6 +89,15 @@ int main(int argc, char * argv[])
         break;
       case 'v':
         verbose = true;
+        break;
+      case 'R':
+        redundancy = stof(optarg);
+        break;
+      case 'F':
+        fixed_redundancy = true;
+        break;
+      case 'A':
+        enable_arq = false;
         break;
       default:
         print_usage(argv[0]);
@@ -127,9 +145,11 @@ int main(int argc, char * argv[])
   RawImage raw_img(width, height);
 
   // initialize the encoder
-  Encoder encoder(width, height, frame_rate, output_path);
+  Encoder encoder(width, height, frame_rate, output_path, redundancy);
   encoder.set_target_bitrate(target_bitrate);
   encoder.set_verbose(verbose);
+  encoder.set_fixed_redundancy(fixed_redundancy);
+  encoder.set_enable_arq(enable_arq);
 
   Poller poller;
 
@@ -183,7 +203,8 @@ int main(int argc, char * argv[])
                  << " fec_type=" << datagram.fec_type
                  << " frag_id=" << datagram.frag_id
                  << " frag_cnt=" << datagram.frag_cnt
-                 << " rtx=" << datagram.num_rtx << endl;
+                 << " rtx=" << datagram.num_rtx 
+                 << endl;
           }
 
           // move the sent datagram to unacked if not a retransmission
@@ -217,24 +238,36 @@ int main(int argc, char * argv[])
         }
         const shared_ptr<Msg> msg = Msg::parse_from_string(*raw_data);
 
-        // ignore invalid or non-ACK messages
-        if (msg == nullptr or msg->type != Msg::Type::ACK) {
-          return;
+        if (msg == nullptr) {
+          continue;
         }
 
-        const auto ack = dynamic_pointer_cast<AckMsg>(msg);
+        if (msg->type == Msg::Type::HOP_ACK) {
+          // HOP_ACK for first-hop loss measurement (redundancy adjustment)
+          const auto hop_ack = dynamic_pointer_cast<HopAckMsg>(msg);
 
-        if (verbose) {
-          cerr << "Received ACK: frame_id=" << ack->frame_id
-               << " frag_id=" << ack->frag_id << endl;
-        }
+          if (verbose) {
+            cerr << "Received HOP_ACK: frame_id=" << hop_ack->frame_id
+                 << " frag_id=" << hop_ack->frag_id << endl;
+          }
 
-        // RTT estimation, retransmission, etc.
-        encoder.handle_ack(ack);
+          encoder.handle_hop_ack(hop_ack);
+        } else if (msg->type == Msg::Type::ACK) {
+          // End-to-end ACK for RTT estimation and ARQ
+          const auto ack = dynamic_pointer_cast<AckMsg>(msg);
 
-        // send_buf might contain datagrams to be retransmitted now
-        if (not encoder.send_buf().empty()) {
-          poller.activate(udp_sock, Poller::Out);
+          if (verbose) {
+            cerr << "Received ACK: frame_id=" << ack->frame_id
+                 << " frag_id=" << ack->frag_id << endl;
+          }
+
+          // RTT estimation, retransmission, etc.
+          encoder.handle_ack(ack);
+
+          // send_buf might contain datagrams to be retransmitted now
+          if (not encoder.send_buf().empty()) {
+            poller.activate(udp_sock, Poller::Out);
+          }
         }
       }
     }
