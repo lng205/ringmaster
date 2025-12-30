@@ -172,7 +172,7 @@ private:
   bool adaptive_;
   optional<Address> receiver_addr_;
   map<uint32_t, FrameState> frames_;
-  uint16_t next_frag_id_ = 0;
+  uint16_t next_frag_id_ = 1000;  // 从 1000 开始，避免与 Sender 的 frag_id 冲突
 
   // Hop-by-hop ACK tracking for adaptive redundancy
   RedundancyController redundancy_ctrl_;
@@ -293,7 +293,12 @@ private:
   Datagram recode(FrameState& state) {
     Galois& gf = Galois::get_instance();
     int n = state.payloads.size();
-    size_t len = state.payload_size;
+    
+    // 找出最大的 payload 大小（用于输出）
+    size_t max_len = 0;
+    for (const auto& p : state.payloads) {
+      max_len = max(max_len, p.size());
+    }
 
     // 生成随机系数（确保至少一个非零）
     vector<uint8_t> r(n);
@@ -305,13 +310,15 @@ private:
       }
     }
 
-    // 线性组合所有缓存的 payload
-    string out(len, 0);
+    // 线性组合所有缓存的 payload（注意每个 payload 长度可能不同）
+    string out(max_len, 0);
     for (int i = 0; i < n; i++) {
       if (!r[i]) continue;
-      for (size_t j = 0; j < len; j++) {
+      size_t plen = state.payloads[i].size();
+      for (size_t j = 0; j < plen; j++) {
         out[j] = gf.add((uint8_t)out[j], gf.mul((uint8_t)state.payloads[i][j], r[i]));
       }
+      // 较短的 payload 相当于末尾补 0，不需要额外操作
     }
 
     Datagram pkt;

@@ -266,7 +266,33 @@ sudo tc qdisc add dev lo root netem loss 5% delay 20ms
 sudo tc qdisc del dev lo root
 ```
 
-## 7. 局限性
+## 7. 已修复的问题
+
+### 7.1 Payload 长度不一致导致重编码失效（2024-12-30）
+
+**问题**：最后一个 DATA 包为节省带宽会**截断传输**（不传 padding 的 0），导致各 payload 长度不一致。原 `recode()` 假设所有 payload 等长，用第一个包的长度遍历所有包，当遍历到较短的最后一个 DATA 包时**越界读取垃圾数据**，生成的重编码包无效。
+
+**修复**：遍历时使用每个 payload 的实际长度，较短包末尾等效补 0。
+
+```cpp
+// 修复前
+size_t len = state.payload_size;  // 第一个包的大小
+for (size_t j = 0; j < len; j++) {
+    out[j] = ... state.payloads[i][j] ...  // 越界！
+}
+
+// 修复后
+size_t plen = state.payloads[i].size();  // 每个包的实际长度
+for (size_t j = 0; j < plen; j++) { ... }
+```
+
+### 7.2 frag_id 冲突（2024-12-30）
+
+**问题**：Relay 的 `next_frag_id_` 从 0 开始，与 Sender 发送的 REPAIR 包 `frag_id` 冲突。Receiver 的 `Frame::insert_frag()` 按 `frag_id + k` 存储 REPAIR 包，冲突时先到的包被保留，后到的被丢弃。
+
+**修复**：`next_frag_id_` 从 1000 开始，避开 Sender 的 frag_id 范围。
+
+## 8. 局限性
 
 | 限制 | 原因 |
 |------|------|
@@ -275,7 +301,7 @@ sudo tc qdisc del dev lo root
 | 冗余度上限 50% | 防止带宽浪费 |
 | 单 Receiver | Relay 只记录第一个连接的 Receiver 地址 |
 
-## 8. 代码结构
+## 9. 代码结构
 
 ```
 src/app/
