@@ -20,7 +20,7 @@ rcParams['axes.unicode_minus'] = False
 rcParams['font.size'] = 10.5  # 五号字体
 rcParams['axes.titlesize'] = 12
 rcParams['axes.labelsize'] = 10.5
-rcParams['legend.fontsize'] = 9
+rcParams['legend.fontsize'] = 12
 rcParams['xtick.labelsize'] = 10
 rcParams['ytick.labelsize'] = 10
 rcParams['figure.dpi'] = 150
@@ -294,7 +294,7 @@ def generate_table():
                 print(f"| {loss:2d}     | {SCHEME_LABELS[scheme]:18s} | {rate:11.1f} | {avg:10.1f} | {p95:9.1f} |")
 
 if __name__ == '__main__':
-    os.chdir('/root/ringmaster')
+    # os.chdir('/root/ringmaster')
     
     print("正在生成图表（黑白国标规范版）...")
     plot_figure1()
